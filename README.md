@@ -31,7 +31,7 @@ On dépose un fichier `.pcap` ou `.pcapng` (Wireshark, tcpdump). PacketLens déc
 
 ## Utilisation
 
-Aucune installation : ouvrez `index.html` dans un navigateur, ou publiez le dossier avec **GitHub Pages** (Settings → Pages → branche `main`, dossier racine).
+Aucune installation : `index.html` est un fichier unique qui contient tout (HTML, CSS, JavaScript). Double-cliquez dessus pour l'ouvrir dans un navigateur, ou publiez le dossier avec **GitHub Pages** (Settings → Pages → branche `main`, dossier racine).
 
 Six captures d'exemple sont intégrées (boutons en haut de la page) et disponibles dans `samples/` pour les ouvrir aussi dans Wireshark :
 
@@ -62,7 +62,8 @@ N'analysez et n'attaquez que des machines et des réseaux dont vous avez l'autor
 ## Architecture
 
 ```
-index.html            page et structure
+index.html            le site complet en un seul fichier (généré, à ne pas modifier à la main)
+src/index.html        structure de la page (source)
 css/style.css         mise en forme
 js/pcap.js            lecture PCAP/PCAPNG et décodage des protocoles
 js/detect.js          statistiques et règles de détection
@@ -70,6 +71,13 @@ js/samples.js         générateur de captures d'exemple (vrais fichiers .pcap)
 js/app.js             interface : chronologie, carte, alertes, tableaux
 tools/test.js         tests : chaque capture doit donner exactement les alertes attendues
 tools/generate-samples.js   régénère le dossier samples/
+tools/build.js        assemble src/, css/ et js/ dans index.html
+```
+
+Après une modification dans `src/`, `css/` ou `js/`, régénérez le site :
+
+```bash
+node tools/build.js
 ```
 
 Tests (Node.js 18 ou plus) :

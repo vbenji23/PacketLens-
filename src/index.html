@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PacketLens</title>
+<meta name="description" content="Analyseur de captures réseau (PCAP) dans le navigateur : chronologie, carte des échanges et détection d'attaques.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@500;800&family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+<script>window.addEventListener('error',e=>{const d=document.getElementById('fatal');if(d){d.hidden=false;d.textContent='Erreur JavaScript : '+(e.message||'inconnue')+'. Essayez avec un navigateur récent (Chrome, Firefox, Edge).'}});</script>
+<script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
+</head>
+<body>
+<header class="band top">
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 48 48" aria-hidden="true">
+      <circle cx="20" cy="20" r="15" fill="none" stroke="currentColor" stroke-width="4"/>
+      <path d="M31 31l12 12" stroke="currentColor" stroke-width="5" stroke-linecap="round"/>
+      <path d="M9 22h5l3-7 4 12 3-8 2 3h5" fill="none" stroke="#4fc1c6" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>
+    <div>
+      <h1>PacketLens</h1>
+      <p class="lede">Ouvrez une capture réseau : PacketLens reconstitue ce qui s'est passé et repère les attaques. L'analyse se fait entièrement dans votre navigateur, le fichier n'est envoyé nulle part.</p>
+    </div>
+  </div>
+  <div class="load">
+    <label class="drop" id="drop" for="file">
+      <input type="file" id="file" accept=".pcap,.pcapng,.cap,.dmp">
+      <strong>Ouvrir une capture</strong>
+      <span>.pcap ou .pcapng, ou glissez le fichier ici</span>
+    </label>
+    <div>
+      <p class="hint">Ou essayez une capture d'exemple :</p>
+      <div class="samples" id="samples" role="group" aria-label="Captures d'exemple"></div>
+      <p class="hint small" id="sdesc"></p>
+    </div>
+  </div>
+</header>
+
+<main>
+  <p id="fatal" class="band fatal" hidden></p>
+  <section class="band status" id="status" aria-live="polite"></section>
+
+  <section class="band">
+    <div class="head">
+      <h2>Chronologie de la capture</h2>
+      <p class="note">En bleu, le nombre de paquets au fil du temps ; en orange, la part liée à une alerte. Chaque bande colorée est une alerte : cliquez pour la lire.</p>
+    </div>
+    <div class="fig" id="tl"><svg id="tlsvg" role="img" aria-label="Chronologie des paquets et des alertes"></svg></div>
+  </section>
+
+  <section class="band split">
+    <div>
+      <h2>Alertes</h2>
+      <div id="alerts" class="alerts"></div>
+    </div>
+    <div>
+      <h2>Carte des échanges</h2>
+      <p class="note">Chaque rond est une machine, chaque trait une conversation. Cliquez sur une machine pour voir ce qu'elle a fait.</p>
+      <div class="fig graph" id="gfig"><canvas id="graph" aria-label="Graphe des machines et de leurs échanges"></canvas></div>
+      <ul class="legend">
+        <li><i style="--c:var(--red)"></i>Attaquant ou machine compromise</li>
+        <li><i style="--c:var(--yel)"></i>Cible ou identifiants exposés</li>
+        <li><i style="--c:var(--blue)"></i>Machine du réseau local</li>
+        <li><i style="--c:var(--cyan)"></i>Internet</li>
+      </ul>
+      <div id="host" class="host"></div>
+    </div>
+  </section>
+
+  <section class="band split">
+    <div>
+      <h2>Protocoles</h2>
+      <div class="donutwrap">
+        <div class="fig donut" id="dfig"><svg id="donut" role="img" aria-label="Répartition des protocoles"></svg></div>
+        <div id="plegend" class="plegend"></div>
+      </div>
+    </div>
+    <div>
+      <h2>Machines les plus actives</h2>
+      <div id="talkers" class="talkers"></div>
+    </div>
+  </section>
+
+  <section class="band" id="packets">
+    <div class="head row">
+      <h2>Paquets</h2>
+      <div class="tools">
+        <input type="search" id="q" placeholder="Filtrer : IP, protocole, port, texte…" aria-label="Filtrer les paquets">
+        <label class="chk"><input type="checkbox" id="onlyBad"> Paquets suspects seulement</label>
+        <button type="button" id="export">Copier le rapport JSON</button>
+        <button type="button" id="download" hidden>Télécharger le rapport</button>
+      </div>
+    </div>
+    <p class="count" id="count"></p>
+    <div class="scroll">
+      <table id="ptable">
+        <thead><tr><th class="num">N°</th><th class="num">Temps</th><th>Source</th><th>Destination</th><th>Protocole</th><th class="num">Taille</th><th>Info</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <button type="button" id="more" class="more" hidden>Afficher plus de paquets</button>
+  </section>
+</main>
+
+<footer class="band foot">
+  <p>PacketLens, projet portfolio cybersécurité de Benjamin Vincenti · <a href="https://github.com/vbenji23">github.com/vbenji23</a></p>
+  <p class="small">Les captures d'exemple sont générées artificiellement : adresses privées ou réservées à la documentation, comptes et mots de passe inventés. N'analysez que des captures que vous avez le droit d'examiner.</p>
+</footer>
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+<script src="js/pcap.js"></script>
+<script src="js/detect.js"></script>
+<script src="js/samples.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

@@ -149,3 +149,4 @@ tr.bad{background:color-mix(in srgb,var(--c) 9%,transparent)}
   table{font-size:13px}
 }
 @media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+.fatal{background:#5a1a12;color:#fff;font-weight:500}
