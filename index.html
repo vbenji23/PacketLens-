@@ -8,7 +8,162 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Red+Hat+Display:wght@500;800&family=Red+Hat+Mono:wght@400;500&family=Red+Hat+Text:wght@400;500;700&display=swap">
-<link rel="stylesheet" href="css/style.css">
+<style>
+/* VOICE: un instrument d'analyste, précis et calme, sans effet
+   IDEA: la sonde réseau / l'oscilloscope : la capture se lit comme un signal dans le temps
+   PICTURE: la chronologie du trafic avec les bandes d'alertes, puis la carte des machines
+   COLOUR and TYPE: fond marine #0b1433, échelle bleu → cyan → jaune → rouge pour la gravité ; Red Hat Display 800, Red Hat Text, Red Hat Mono
+   LAYOUT: en-tête compact avec le chargeur, chronologie pleine largeur, alertes | carte, protocoles | machines, table des paquets */
+:root{color-scheme:dark;--bg:#0b1433;--panel:#111c45;--panel2:#172456;--line:#26346f;--ink:#eef0fa;--mute:#a3acd3;--blue:#3b4fd8;--blue2:#5a6cf0;--cyan:#4fc1c6;--yel:#f7e463;--org:#f39a3d;--red:#e8452c;
+  --mono:"Red Hat Mono",ui-monospace,Menlo,Consolas,monospace;--disp:"Red Hat Display",system-ui,sans-serif}
+:root[data-theme=light],:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:24px;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Red Hat Text",system-ui,sans-serif;overflow-x:clip}
+a{color:var(--cyan)}
+h1,h2,h3{font-family:var(--disp);margin:0;line-height:1.05;text-wrap:balance}
+h1{font-size:clamp(34px,5vw,52px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:24px;font-weight:800;margin-bottom:8px}
+h3{font-size:17px;font-weight:800;line-height:1.25}
+p{margin:0}
+.band{padding:clamp(22px,3.4vw,48px) max(5vw,16px)}
+.band>*{max-width:1240px;margin-inline:auto}
+.fig{position:relative;min-height:220px}
+.fig>svg,.fig>canvas{position:absolute;inset:0;width:100%;height:100%}
+pre,.scroll{overflow-x:auto}
+code{overflow-wrap:anywhere}
+.note{color:var(--mute);font-size:15px;max-width:70ch;margin-bottom:14px}
+.small{font-size:14px}
+button,.drop,input[type=search]{font:inherit;color:inherit}
+button{min-height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-weight:500}
+button:hover{border-color:var(--blue2)}
+button:focus-visible,input:focus-visible,.drop:focus-within{outline:3px solid var(--cyan);outline-offset:2px}
+
+/* En-tête */
+.top{background:linear-gradient(180deg,#0e1a44,var(--bg));border-bottom:1px solid var(--line);padding-bottom:28px}
+.top{display:grid;gap:24px}
+.top>*{width:100%}
+.brand{display:flex;gap:18px;align-items:flex-start}
+.logo{width:56px;height:56px;flex:none;color:var(--ink);margin-top:2px}
+.lede{color:var(--mute);margin-top:10px;max-width:62ch;font-size:17px}
+.load{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:24px;align-items:start}
+.drop{display:grid;gap:2px;place-content:center;text-align:center;min-height:112px;padding:16px;border:2px dashed var(--blue2);border-radius:14px;background:rgba(59,79,216,.12);cursor:pointer;transition:background .2s}
+.drop.over{background:rgba(79,193,198,.2);border-color:var(--cyan)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.drop strong{font-family:var(--disp);font-size:20px}
+.drop span{color:var(--mute);font-size:14px}
+.hint{color:var(--mute);margin-bottom:8px;font-size:15px}
+.hint.small{margin:10px 0 0;font-size:14px;min-height:1.5em}
+.samples{display:flex;flex-wrap:wrap;gap:8px}
+.samples button[aria-pressed=true]{background:var(--blue);border-color:var(--blue2)}
+
+/* Résumé */
+.status{padding-block:22px 6px}
+.file{color:var(--mute);font-size:15px;margin-bottom:14px;overflow-wrap:anywhere}
+.file b{color:var(--ink);font-family:var(--mono);font-weight:500}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(0,1.6fr);gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi b{display:block;font-family:var(--disp);font-size:clamp(24px,3vw,32px);font-weight:800;line-height:1.1;white-space:nowrap}
+.kpi span{color:var(--mute);font-size:14px}
+.verdict{border-color:var(--c,var(--line));background:linear-gradient(90deg,color-mix(in srgb,var(--c,var(--panel)) 22%,var(--panel)),var(--panel))}
+.verdict b{color:var(--c,var(--ink))}
+.sevs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:2px 9px;border-radius:99px;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--ink);white-space:nowrap}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+
+/* Chronologie */
+#tl{min-height:200px}
+#tlsvg text{font-family:"Red Hat Text",sans-serif}
+.lane{cursor:pointer}
+.lane:hover rect.bar{filter:brightness(1.2)}
+
+/* Alertes + carte */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(20px,3vw,40px)}
+.split>*{width:100%}
+.band.split{max-width:none}
+.band.split{padding-inline:max(5vw,16px)}
+@media(min-width:1340px){.band.split{padding-inline:calc((100vw - 1240px)/2)}}
+.alerts{display:grid;gap:12px}
+.alert{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:12px;padding:14px 16px;transition:box-shadow .3s}
+.alert.flash{box-shadow:0 0 0 3px var(--c)}
+.alert header{display:flex;gap:10px;align-items:center}
+.alert .n{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#0b1433;font-weight:700;font-size:14px}
+.alert h3{flex:1}
+.alert .pill{flex:none}
+.alert .meta{font-family:var(--mono);font-size:13px;color:var(--mute);margin:8px 0 6px;overflow-wrap:anywhere}
+.alert .tip{margin-top:8px;font-size:15px;color:var(--mute)}
+.alert .tip b{color:var(--ink)}
+.alert footer{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:12px}
+.alert footer a{font-size:14px}
+.empty{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--cyan);border-radius:12px;padding:18px}
+.empty b{font-family:var(--disp);font-size:20px;display:block;margin-bottom:4px}
+.graph{min-height:440px;background:radial-gradient(circle at 50% 45%,#16235a,var(--panel) 70%);border:1px solid var(--line);border-radius:14px;cursor:crosshair}
+.legend{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c);margin-right:6px}
+.host{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.host h3{font-family:var(--mono);font-weight:500;font-size:20px}
+.host .role{color:var(--mute);font-size:14px;margin:4px 0 10px}
+.host dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:0 0 12px;font-size:15px}
+.host dt{color:var(--mute)}
+.host dd{margin:0;overflow-wrap:anywhere}
+.host dd code{font-family:var(--mono);font-size:14px}
+.host .links{display:flex;flex-wrap:wrap;gap:8px}
+
+/* Protocoles + machines */
+.donutwrap{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:20px;align-items:center}
+.donut{min-height:220px}
+.plegend,.talkers{display:grid;gap:8px}
+.prow,.trow{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr) 5.5em;gap:10px;align-items:center;font-size:15px}
+.trow{grid-template-columns:minmax(0,12em) minmax(0,1fr) 6.5em;background:none;border:0;padding:4px 0;min-height:36px;text-align:left;border-radius:6px}
+.trow:hover .meter i{filter:brightness(1.25)}
+.prow span:first-child,.trow span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow span:first-child{font-family:var(--mono);font-size:14px}
+.meter{height:10px;border-radius:5px;background:var(--panel2);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:5px;background:var(--c,var(--blue2))}
+.prow b,.trow b{font-weight:500;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tag{font-size:12px;padding:1px 6px;border-radius:4px;margin-left:6px;background:color-mix(in srgb,var(--c) 25%,transparent);font-family:"Red Hat Text",sans-serif}
+
+/* Paquets */
+.head.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+input[type=search]{min-height:44px;font-size:16px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);width:min(320px,100%)}
+.chk{display:flex;gap:8px;align-items:center;min-height:44px;font-size:15px;cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:var(--cyan)}
+.count{color:var(--mute);font-size:14px;margin:12px 0 8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.count button{min-height:32px;padding:0 10px;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--mute);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--bg)}
+td{padding:6px 10px;border-bottom:1px solid rgba(38,52,111,.6);font-family:var(--mono);font-size:13px;vertical-align:top}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td:nth-child(3),td:nth-child(4),td:nth-child(5){white-space:nowrap}
+td:last-child{font-family:"Red Hat Text",sans-serif;font-size:14px;overflow-wrap:anywhere;min-width:18em}
+tr.bad td:first-child{box-shadow:inset 4px 0 0 var(--c)}
+tr.bad{background:color-mix(in srgb,var(--c) 9%,transparent)}
+.scroll{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.more{margin-top:12px}
+.foot{border-top:1px solid var(--line);color:var(--mute);font-size:15px;display:grid;gap:6px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,140%);background:var(--panel2);border:1px solid var(--cyan);padding:12px 18px;border-radius:10px;max-width:calc(100vw - 32px);transition:transform .3s;z-index:9}
+.toast.on{transform:translate(-50%,0)}
+
+@media(max-width:960px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .verdict{grid-column:1/-1}
+  .split{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:600px){
+  .load{grid-template-columns:minmax(0,1fr)}
+  .brand{gap:12px}.logo{width:42px;height:42px}
+  .donutwrap{grid-template-columns:minmax(0,1fr)}
+  .donut{min-height:200px;max-width:240px;margin-inline:auto;width:100%}
+  .trow{grid-template-columns:minmax(0,1fr) 5.5em}.trow .meter{grid-column:1/-1;grid-row:2}
+  .graph{min-height:320px}
+  table{font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
+.fatal{background:#5a1a12;color:#fff;font-weight:500}
+
+</style>
+<script>window.addEventListener('error',e=>{const d=document.getElementById('fatal');if(d){d.hidden=false;d.textContent='Erreur JavaScript : '+(e.message||'inconnue')+'. Essayez avec un navigateur récent (Chrome, Firefox, Edge).'}});</script>
 <script>new MutationObserver(()=>{for(const c of document.querySelectorAll('.stack td:not([data-l])')){let i=0,p=c;while(p=p.previousElementSibling)i+=p.colSpan;c.dataset.l=c.closest('table').rows[0].cells[i]?.textContent||''}}).observe(document,{childList:true,subtree:true})</script>
 </head>
 <body>
@@ -39,6 +194,7 @@
 </header>
 
 <main>
+  <p id="fatal" class="band fatal" hidden></p>
   <section class="band status" id="status" aria-live="polite"></section>
 
   <section class="band">
@@ -109,9 +265,1238 @@
 </footer>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
-<script src="js/pcap.js"></script>
-<script src="js/detect.js"></script>
-<script src="js/samples.js"></script>
-<script src="js/app.js"></script>
+<script>
+/* PacketLens — lecture des fichiers PCAP / PCAPNG et décodage des protocoles.
+   Tout se fait en JavaScript pur, octet par octet, sans bibliothèque. */
+(function (root) {
+  'use strict';
+  const PL = root.PL = root.PL || {};
+
+  const u16 = (d, o) => ((d[o] << 8) | d[o + 1]) >>> 0;
+  const u32 = (d, o) => ((d[o] << 24) | (d[o + 1] << 16) | (d[o + 2] << 8) | d[o + 3]) >>> 0;
+  const hex2 = b => b.toString(16).padStart(2, '0');
+  const mac = (d, o) => Array.from(d.subarray(o, o + 6), hex2).join(':');
+  const ip4 = (d, o) => d[o] + '.' + d[o + 1] + '.' + d[o + 2] + '.' + d[o + 3];
+  function ip6(d, o) {
+    const p = [];
+    for (let i = 0; i < 16; i += 2) p.push(u16(d, o + i).toString(16));
+    return p.join(':').replace(/(^|:)0(:0)+(:|$)/, '::').replace(/:{3,}/, '::');
+  }
+  function txt(u8) {
+    let s = '';
+    for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
+    return s;
+  }
+
+  /* ---------- Lecture du conteneur ---------- */
+  function readCapture(buf) {
+    if (buf instanceof Uint8Array) buf = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength);
+    if (buf.byteLength < 24) throw new Error('Fichier trop petit pour être une capture réseau.');
+    const dv = new DataView(buf);
+    const magic = dv.getUint32(0, false);
+    if (magic === 0x0a0d0d0a) return readPcapng(buf, dv);
+    let le, nano;
+    if (magic === 0xa1b2c3d4) { le = false; nano = false; }
+    else if (magic === 0xd4c3b2a1) { le = true; nano = false; }
+    else if (magic === 0xa1b23c4d) { le = false; nano = true; }
+    else if (magic === 0x4d3cb2a1) { le = true; nano = true; }
+    else throw new Error("Format non reconnu : ce fichier n'est ni un .pcap ni un .pcapng.");
+    const link = dv.getUint32(20, le);
+    const packets = [];
+    let off = 24;
+    while (off + 16 <= buf.byteLength) {
+      const sec = dv.getUint32(off, le), frac = dv.getUint32(off + 4, le);
+      const incl = dv.getUint32(off + 8, le), orig = dv.getUint32(off + 12, le);
+      off += 16;
+      if (off + incl > buf.byteLength) break; // capture tronquée
+      packets.push({ ts: sec + frac / (nano ? 1e9 : 1e6), link, len: orig, data: new Uint8Array(buf, off, incl) });
+      off += incl;
+    }
+    return { format: nano ? 'pcap (nanosecondes)' : 'pcap', link, packets };
+  }
+
+  function readPcapng(buf, dv) {
+    let off = 0, le = true;
+    const ifs = [], packets = [];
+    while (off + 12 <= buf.byteLength) {
+      const type0 = dv.getUint32(off, true);
+      if (type0 === 0x0a0d0d0a) { le = dv.getUint32(off + 8, true) === 0x1a2b3c4d; ifs.length = 0; }
+      const type = dv.getUint32(off, le);
+      const blen = dv.getUint32(off + 4, le);
+      if (blen < 12 || off + blen > buf.byteLength) break;
+      if (type === 1) { // Interface Description Block
+        const link = dv.getUint16(off + 8, le);
+        let tsres = 6, o = off + 16;
+        const end = off + blen - 4;
+        while (o + 4 <= end) {
+          const code = dv.getUint16(o, le), l = dv.getUint16(o + 2, le);
+          if (code === 0) break;
+          if (code === 9 && l >= 1) tsres = dv.getUint8(o + 4);
+          o += 4 + ((l + 3) & ~3);
+        }
+        ifs.push({ link, div: (tsres & 0x80) ? Math.pow(2, tsres & 0x7f) : Math.pow(10, tsres) });
+      } else if (type === 6) { // Enhanced Packet Block
+        const id = dv.getUint32(off + 8, le);
+        const hi = dv.getUint32(off + 12, le), lo = dv.getUint32(off + 16, le);
+        const cap = dv.getUint32(off + 20, le), orig = dv.getUint32(off + 24, le);
+        const itf = ifs[id] || { link: 1, div: 1e6 };
+        packets.push({ ts: (hi * 4294967296 + lo) / itf.div, link: itf.link, len: orig, data: new Uint8Array(buf, off + 28, Math.min(cap, blen - 32)) });
+      } else if (type === 3) { // Simple Packet Block
+        const orig = dv.getUint32(off + 8, le);
+        const itf = ifs[0] || { link: 1 };
+        packets.push({ ts: 0, link: itf.link, len: orig, data: new Uint8Array(buf, off + 12, Math.min(orig, blen - 16)) });
+      }
+      off += blen;
+    }
+    return { format: 'pcapng', link: ifs[0] ? ifs[0].link : 1, packets };
+  }
+
+  /* ---------- Décodage d'un paquet ---------- */
+  const QT = { 1: 'A', 2: 'NS', 5: 'CNAME', 12: 'PTR', 15: 'MX', 16: 'TXT', 28: 'AAAA', 33: 'SRV', 65: 'HTTPS', 255: 'ANY' };
+  const FLAGS = [[0x02, 'SYN'], [0x10, 'ACK'], [0x01, 'FIN'], [0x04, 'RST'], [0x08, 'PSH'], [0x20, 'URG']];
+  const flagStr = f => FLAGS.filter(x => f & x[0]).map(x => x[1]).join(', ');
+
+  function decode(p, i) {
+    const d = p.data;
+    const r = { i, ts: p.ts, len: p.len, proto: '?', src: '', dst: '', info: '' };
+    try {
+      let o = 0, et = 0;
+      if (p.link === 1) {
+        if (d.length < 14) { r.info = 'Trame tronquée'; return r; }
+        r.dstMac = mac(d, 0); r.srcMac = mac(d, 6); et = u16(d, 12); o = 14;
+        while (et === 0x8100 || et === 0x88a8) { et = u16(d, o + 2); o += 4; } // VLAN
+      } else if (p.link === 113) { et = u16(d, 14); o = 16; } // Linux cooked
+      else if (p.link === 101 || p.link === 228 || p.link === 229) { et = (d[0] >> 4) === 6 ? 0x86dd : 0x0800; }
+      else if (p.link === 0) { et = (d[0] === 2 || d[3] === 2) ? 0x0800 : 0x86dd; o = 4; } // loopback BSD
+      else { r.proto = 'Lien ' + p.link; r.info = 'Type de lien non pris en charge'; return r; }
+      if (et === 0x0806) return arp(d, o, r);
+      if (et === 0x0800) return ipv4(d, o, r);
+      if (et === 0x86dd) return ipv6(d, o, r);
+      r.proto = 'Ethernet'; r.info = 'EtherType 0x' + et.toString(16).padStart(4, '0');
+    } catch (e) { r.info = 'Paquet tronqué ou malformé'; }
+    return r;
+  }
+
+  function arp(d, o, r) {
+    const op = u16(d, o + 6);
+    r.proto = 'ARP';
+    r.arp = { op, sha: mac(d, o + 8), spa: ip4(d, o + 14), tha: mac(d, o + 18), tpa: ip4(d, o + 24) };
+    r.src = r.arp.spa; r.dst = r.arp.tpa;
+    r.info = op === 1 ? `Qui a ${r.arp.tpa} ? Répondre à ${r.arp.spa}` : `${r.arp.spa} est à ${r.arp.sha}`;
+    return r;
+  }
+
+  function ipv4(d, o, r) {
+    const ihl = (d[o] & 15) * 4, proto = d[o + 9], tot = u16(d, o + 2);
+    r.src = ip4(d, o + 12); r.dst = ip4(d, o + 16); r.ttl = d[o + 8];
+    const end = Math.min(d.length, tot ? o + tot : d.length);
+    return l4(d, o + ihl, end, proto, r);
+  }
+
+  function ipv6(d, o, r) {
+    r.src = ip6(d, o + 8); r.dst = ip6(d, o + 24);
+    return l4(d, o + 40, Math.min(d.length, o + 40 + u16(d, o + 4)), d[o + 6], r);
+  }
+
+  function l4(d, o, end, proto, r) {
+    if (proto === 6) {
+      r.proto = 'TCP'; r.sport = u16(d, o); r.dport = u16(d, o + 2); r.seq = u32(d, o + 4);
+      r.flags = d[o + 13];
+      const pay = d.subarray(o + (d[o + 12] >> 4) * 4, end);
+      r.plen = pay.length;
+      r.info = `${r.sport} → ${r.dport} [${flagStr(r.flags)}]` + (pay.length ? ` ${pay.length} o` : '');
+      if (pay.length) app(pay, r);
+      return r;
+    }
+    if (proto === 17) {
+      r.proto = 'UDP'; r.sport = u16(d, o); r.dport = u16(d, o + 2);
+      const pay = d.subarray(o + 8, end);
+      r.plen = pay.length;
+      r.info = `${r.sport} → ${r.dport} ${pay.length} o`;
+      if (r.sport === 53 || r.dport === 53 || r.sport === 5353 || r.dport === 5353) dns(pay, r);
+      return r;
+    }
+    if (proto === 1 || proto === 58) {
+      r.proto = proto === 1 ? 'ICMP' : 'ICMPv6'; r.icmpType = d[o];
+      r.info = icmpName(proto, d[o]);
+      return r;
+    }
+    r.proto = 'IP/' + proto;
+    return r;
+  }
+
+  function icmpName(proto, t) {
+    const v4 = { 0: 'Réponse echo (ping)', 3: 'Destination injoignable', 5: 'Redirection', 8: 'Requête echo (ping)', 11: 'TTL expiré' };
+    const v6 = { 1: 'Destination injoignable', 128: 'Requête echo (ping)', 129: 'Réponse echo (ping)', 133: 'Sollicitation de routeur', 134: 'Annonce de routeur', 135: 'Sollicitation de voisin', 136: 'Annonce de voisin' };
+    return (proto === 1 ? v4 : v6)[t] || 'Type ' + t;
+  }
+
+  function readName(p, o) {
+    const parts = [];
+    let next = -1, guard = 0;
+    while (o < p.length && guard++ < 128) {
+      const l = p[o];
+      if (l === 0) { o++; break; }
+      if ((l & 0xc0) === 0xc0) { if (next < 0) next = o + 2; o = ((l & 0x3f) << 8) | p[o + 1]; continue; }
+      parts.push(txt(p.subarray(o + 1, o + 1 + l)));
+      o += 1 + l;
+    }
+    return { name: parts.join('.'), next: next < 0 ? o : next };
+  }
+
+  function dns(p, r) {
+    if (p.length < 17) return;
+    const flags = u16(p, 2);
+    const nm = readName(p, 12);
+    if (!nm.name) return;
+    const qt = u16(p, nm.next);
+    r.proto = 'DNS';
+    r.dns = { id: u16(p, 0), resp: !!(flags & 0x8000), name: nm.name, qtype: qt, rcode: flags & 15, an: u16(p, 6) };
+    r.info = (r.dns.resp ? 'Réponse ' : 'Requête ') + (QT[qt] || qt) + ' ' + nm.name + (r.dns.resp && r.dns.rcode === 3 ? ' (NXDOMAIN)' : '');
+  }
+
+  function headers(s) {
+    const h = {};
+    const lines = s.split(/\r?\n/);
+    for (let k = 1; k < lines.length && lines[k]; k++) {
+      const c = lines[k].indexOf(':');
+      if (c > 0) h[lines[k].slice(0, c).trim().toLowerCase()] = lines[k].slice(c + 1).trim();
+    }
+    return h;
+  }
+
+  function findSni(p) {
+    try {
+      let o = 5 + 4 + 2 + 32;
+      o += 1 + p[o];
+      o += 2 + u16(p, o);
+      o += 1 + p[o];
+      const end = Math.min(p.length, o + 2 + u16(p, o));
+      o += 2;
+      while (o + 4 <= end) {
+        const t = u16(p, o), l = u16(p, o + 2);
+        if (t === 0) return txt(p.subarray(o + 9, o + 9 + u16(p, o + 7)));
+        o += 4 + l;
+      }
+    } catch (e) { /* pas de SNI */ }
+    return '';
+  }
+
+  function app(pay, r) {
+    const s = txt(pay.subarray(0, Math.min(pay.length, 4096)));
+    const has = port => r.sport === port || r.dport === port;
+    if (/^(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH) \S+ HTTP\/1\.[01]\r?\n/.test(s)) {
+      const line = s.split(/\r?\n/)[0], parts = line.split(' ');
+      const sep = s.search(/\r?\n\r?\n/);
+      r.proto = 'HTTP';
+      r.http = { req: true, method: parts[0], path: parts[1], headers: headers(s), body: sep >= 0 ? s.slice(sep).replace(/^\r?\n\r?\n/, '') : '' };
+      r.http.host = r.http.headers.host || r.dst;
+      r.info = line;
+      return;
+    }
+    if (/^HTTP\/1\.[01] \d{3}/.test(s)) {
+      r.proto = 'HTTP'; r.http = { req: false, status: +s.slice(9, 12) };
+      r.info = s.split(/\r?\n/)[0];
+      return;
+    }
+    if (has(21)) {
+      r.proto = 'FTP'; r.ftp = s.trim();
+      r.info = r.ftp.split(/\r?\n/)[0].replace(/^PASS .*/i, 'PASS ••••••');
+      return;
+    }
+    if (has(22)) {
+      r.proto = 'SSH';
+      if (s.startsWith('SSH-')) { r.ssh = s.trim(); r.info = 'Bannière ' + r.ssh; }
+      else r.info = `Données chiffrées ${pay.length} o`;
+      return;
+    }
+    if (has(443) || has(8443)) {
+      r.proto = 'TLS';
+      if (pay[0] === 22 && pay[5] === 1) {
+        const sni = findSni(pay);
+        r.tls = { sni };
+        r.info = 'Client Hello' + (sni ? ' · ' + sni : '');
+      } else r.info = `Données chiffrées ${pay.length} o`;
+      return;
+    }
+    if (has(23)) { r.proto = 'Telnet'; r.info = `Telnet ${pay.length} o (en clair)`; return; }
+    if (has(445) || has(139)) { r.proto = 'SMB'; r.info = `SMB ${pay.length} o`; }
+  }
+
+  Object.assign(PL, { readCapture, decode, txt, QT });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* PacketLens — statistiques et règles de détection.
+   Chaque règle lit la liste des paquets décodés et produit des alertes. */
+(function (root) {
+  'use strict';
+  const PL = root.PL = root.PL || {};
+
+  const RANK = { none: 0, info: 1, moy: 2, haute: 3, crit: 4 };
+  const AUTH = { 21: 'FTP', 22: 'SSH', 23: 'Telnet', 110: 'POP3', 143: 'IMAP', 1433: 'MSSQL', 3306: 'MySQL', 3389: 'RDP', 5432: 'PostgreSQL', 5900: 'VNC' };
+  const isPrivate = ip => /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|127\.|169\.254\.|fe80:|fc|fd)/i.test(ip);
+
+  function fmtDur(s) {
+    if (s < 1) return Math.round(s * 1000) + ' ms';
+    if (s < 60) return s.toFixed(1).replace('.', ',') + ' s';
+    const m = Math.floor(s / 60), r = Math.round(s % 60);
+    return m + ' min' + (r ? ' ' + r + ' s' : '');
+  }
+  function mask(p) {
+    if (!p) return '(vide)';
+    if (p.length <= 2) return '••';
+    return p[0] + '•'.repeat(Math.min(8, p.length - 2)) + p[p.length - 1];
+  }
+  function b64(s) {
+    try { return typeof atob === 'function' ? atob(s) : Buffer.from(s, 'base64').toString('latin1'); } catch (e) { return ''; }
+  }
+  function urlDec(s) {
+    try { return decodeURIComponent(s.replace(/\+/g, ' ')); } catch (e) { return s; }
+  }
+  function entropy(str) {
+    if (!str) return 0;
+    const f = {};
+    for (const c of str) f[c] = (f[c] || 0) + 1;
+    let e = 0;
+    for (const k in f) { const p = f[k] / str.length; e -= p * Math.log2(p); }
+    return e;
+  }
+  const push = (m, k, mk) => { let v = m.get(k); if (!v) { v = mk(); m.set(k, v); } return v; };
+
+  function analyze(cap) {
+    const pk = cap.packets.map(PL.decode);
+    let t0 = Infinity, t1 = -Infinity, bytes = 0;
+    for (const r of pk) { if (r.ts < t0) t0 = r.ts; if (r.ts > t1) t1 = r.ts; bytes += r.len; }
+    if (!pk.length) t0 = t1 = 0;
+
+    /* ---------- Statistiques ---------- */
+    const protos = new Map(), hosts = new Map(), edges = new Map(), macToIp = new Map();
+    const H = ip => push(hosts, ip, () => ({ ip, macs: new Set(), out: 0, inn: 0, bout: 0, bin: 0, protos: new Set(), ports: new Set(), peers: new Set(), role: '', alerts: [], local: isPrivate(ip) }));
+    for (const r of pk) {
+      protos.set(r.proto, (protos.get(r.proto) || 0) + 1);
+      if (!r.src || !r.dst) continue;
+      if (r.arp && r.arp.op === 1) { H(r.src).macs.add(r.arp.sha); continue; } // une simple question ARP ne crée pas de conversation
+      const a = H(r.src), b = H(r.dst);
+      a.out++; a.bout += r.len; b.inn++; b.bin += r.len;
+      a.protos.add(r.proto); b.protos.add(r.proto);
+      a.peers.add(r.dst); b.peers.add(r.src);
+      if (r.arp) a.macs.add(r.arp.sha);
+      else if (r.srcMac && a.local) { a.macs.add(r.srcMac); push(macToIp, r.srcMac, () => new Set()).add(r.src); }
+      if (r.flags !== undefined && (r.flags & 0x12) === 0x02) a.ports.add(r.dport);
+      else if (r.proto === 'UDP' || r.proto === 'DNS') { if (r.dport < r.sport) a.ports.add(r.dport); }
+      const k = r.src < r.dst ? r.src + '|' + r.dst : r.dst + '|' + r.src;
+      const e = push(edges, k, () => ({ a: r.src < r.dst ? r.src : r.dst, b: r.src < r.dst ? r.dst : r.src, bytes: 0, pkts: 0, protos: new Set() }));
+      e.bytes += r.len; e.pkts++; e.protos.add(r.proto);
+    }
+
+    const alerts = [];
+    const add = a => alerts.push(Object.assign({ te: a.ts, srcRole: 'attaquant', dstRole: 'cible' }, a));
+
+    /* ---------- 1. Scan de ports TCP ---------- */
+    const syns = new Map(), open = new Map();
+    for (const r of pk) {
+      if (r.flags === undefined) continue;
+      if ((r.flags & 0x12) === 0x02) {
+        const s = push(syns, r.src + '>' + r.dst, () => ({ src: r.src, dst: r.dst, ports: new Set(), t1: r.ts, t2: r.ts, idx: [] }));
+        if (!s.ports.has(r.dport)) { s.ports.add(r.dport); s.t2 = r.ts; s.idx.push(r.i); }
+      } else if ((r.flags & 0x12) === 0x12) push(open, r.dst + '>' + r.src, () => new Set()).add(r.sport);
+    }
+    for (const s of syns.values()) {
+      if (s.ports.size < 20 || s.t2 - s.t1 > 600) continue;
+      const op = [...(open.get(s.src + '>' + s.dst) || [])].sort((x, y) => x - y);
+      add({
+        sev: 'haute', type: 'scan', title: 'Scan de ports', src: s.src, dst: s.dst, ts: s.t1, te: s.t2, idx: s.idx,
+        detail: `${s.src} a sondé ${s.ports.size} ports TCP de ${s.dst} en ${fmtDur(s.t2 - s.t1)} avec des paquets SYN (scan « semi-ouvert », typique de nmap -sS). Ports ouverts trouvés : ${op.length ? op.join(', ') : 'aucun'}.`,
+        mitre: ['T1046', 'Network Service Discovery'],
+        conseil: "Bloquer l'IP source, fermer les services inutiles et surveiller ce que l'attaquant fait ensuite sur les ports ouverts."
+      });
+    }
+
+    /* ---------- 2. Balayage ARP et ping sweep (découverte d'hôtes) ---------- */
+    const arpReq = new Map(), pings = new Map();
+    for (const r of pk) {
+      if (r.arp && r.arp.op === 1 && r.arp.spa !== r.arp.tpa) {
+        const s = push(arpReq, r.arp.spa, () => ({ dst: new Set(), t1: r.ts, t2: r.ts, idx: [] }));
+        if (!s.dst.has(r.arp.tpa)) { s.dst.add(r.arp.tpa); s.t2 = r.ts; s.idx.push(r.i); }
+      }
+      if ((r.proto === 'ICMP' && r.icmpType === 8) || (r.proto === 'ICMPv6' && r.icmpType === 128)) {
+        const s = push(pings, r.src, () => ({ dst: new Set(), t1: r.ts, t2: r.ts, idx: [] }));
+        if (!s.dst.has(r.dst)) { s.dst.add(r.dst); s.t2 = r.ts; s.idx.push(r.i); }
+      }
+    }
+    const answered = new Set(pk.filter(r => r.arp && r.arp.op === 2).map(r => r.arp.spa + '>' + r.arp.tpa));
+    for (const [src, s] of arpReq) {
+      if (s.dst.size < 20 || s.t2 - s.t1 > 120) continue;
+      const live = [...s.dst].filter(ip => answered.has(ip + '>' + src));
+      add({
+        sev: 'moy', type: 'arpsweep', title: "Balayage ARP (découverte d'hôtes)", src, dst: s.dst.size + ' adresses', ts: s.t1, te: s.t2, idx: s.idx,
+        detail: `${src} a demandé l'adresse MAC de ${s.dst.size} IP différentes en ${fmtDur(s.t2 - s.t1)}. ${live.length} machine(s) ont répondu : ${live.join(', ') || 'aucune'}. C'est la première étape d'une reconnaissance (nmap -sn, netdiscover).`,
+        mitre: ['T1018', 'Remote System Discovery'],
+        conseil: 'Identifier la machine source : un poste qui balaye tout le réseau sans raison doit être isolé et examiné.'
+      });
+    }
+    for (const [src, s] of pings) {
+      if (s.dst.size < 10 || s.t2 - s.t1 > 300) continue;
+      add({
+        sev: 'moy', type: 'pingsweep', title: 'Ping sweep', src, dst: s.dst.size + ' adresses', ts: s.t1, te: s.t2, idx: s.idx,
+        detail: `${src} a envoyé des pings à ${s.dst.size} machines différentes en ${fmtDur(s.t2 - s.t1)} pour savoir lesquelles sont allumées.`,
+        mitre: ['T1018', 'Remote System Discovery'],
+        conseil: 'Vérifier si cette machine a une raison légitime de superviser le réseau, sinon la considérer comme suspecte.'
+      });
+    }
+
+    /* ---------- 3. Brute force (connexions répétées vers un service d'authentification) ---------- */
+    const tries = new Map(), banners = new Map();
+    for (const r of pk) {
+      if (r.ssh && r.dport === 22) banners.set(r.src, r.ssh);
+      if (r.flags === undefined || (r.flags & 0x12) !== 0x02 || !AUTH[r.dport]) continue;
+      const t = push(tries, r.src + '>' + r.dst + ':' + r.dport, () => ({ src: r.src, dst: r.dst, port: r.dport, ts: [], idx: [] }));
+      t.ts.push(r.ts); t.idx.push(r.i);
+    }
+    for (const t of tries.values()) {
+      const n = t.ts.length, span = t.ts[n - 1] - t.ts[0];
+      if (n < 10 || span > 900) continue;
+      const svc = AUTH[t.port], ban = banners.get(t.src);
+      const tool = ban && /libssh|paramiko|go|hydra|medusa|ncrack/i.test(ban) ? ` Le client s'annonce « ${ban} », une bibliothèque utilisée par les outils d'attaque comme Hydra, pas un vrai client SSH.` : '';
+      add({
+        sev: 'haute', type: 'brute', title: `Brute force ${svc}`, src: t.src, dst: t.dst + ':' + t.port, ts: t.ts[0], te: t.ts[n - 1], idx: t.idx,
+        detail: `${n} connexions ${svc} de ${t.src} vers ${t.dst} en ${fmtDur(span)} (environ ${Math.round(n / Math.max(span / 60, 1 / 60))} par minute).${tool}`,
+        mitre: ['T1110', 'Brute Force'],
+        conseil: `Bloquer l'IP (fail2ban), interdire la connexion ${svc} par mot de passe et vérifier dans les logs du serveur si une tentative a réussi.`
+      });
+    }
+
+    /* ---------- 4. FTP : échecs répétés et identifiants en clair ---------- */
+    const ftpUser = new Map(), ftpPending = new Map(), ftpStats = new Map(), ftpOk = [];
+    for (const r of pk) {
+      if (r.proto !== 'FTP') continue;
+      if (r.dport === 21) {
+        const flow = r.src + ':' + r.sport + '>' + r.dst;
+        let m;
+        if ((m = /^USER (.+)/i.exec(r.ftp))) ftpUser.set(flow, m[1].trim());
+        else if ((m = /^PASS (.*)/i.exec(r.ftp))) ftpPending.set(flow, { user: ftpUser.get(flow) || '?', pass: m[1].trim(), i: r.i, ts: r.ts });
+      } else if (r.sport === 21) {
+        const flow = r.dst + ':' + r.dport + '>' + r.src;
+        const p = ftpPending.get(flow);
+        if (!p) continue;
+        const code = parseInt(r.ftp.slice(0, 3), 10);
+        const st = push(ftpStats, r.dst + '>' + r.src, () => ({ src: r.dst, dst: r.src, fail: 0, users: new Set(), idx: [], t1: p.ts, t2: r.ts, ok: null }));
+        if (code === 530) { st.fail++; st.users.add(p.user); st.idx.push(p.i, r.i); st.t2 = r.ts; }
+        else if (code === 230) { const ok = Object.assign({ src: r.dst, dst: r.src, ri: r.i }, p); if (st.fail) { st.ok = ok; st.idx.push(p.i, r.i); st.t2 = r.ts; } ftpOk.push(ok); }
+        ftpPending.delete(flow);
+      }
+    }
+    const bruteFtp = new Set();
+    for (const st of ftpStats.values()) {
+      if (st.fail < 5) continue;
+      bruteFtp.add(st.src + '>' + st.dst);
+      add({
+        sev: st.ok ? 'crit' : 'haute', type: 'brute', title: st.ok ? 'Brute force FTP réussi' : 'Brute force FTP', src: st.src, dst: st.dst + ':21', ts: st.t1, te: st.t2, idx: st.idx,
+        detail: `${st.fail} mots de passe refusés (code 530) pour ${[...st.users].join(', ')}.` + (st.ok ? ` Puis connexion acceptée (code 230) avec le compte « ${st.ok.user} » et le mot de passe ${mask(st.ok.pass)}, visible en clair dans la capture. L'attaquant a désormais accès au serveur.` : ' Aucune tentative réussie dans la capture.'),
+        mitre: ['T1110.001', 'Password Guessing'],
+        conseil: st.ok ? `Changer immédiatement le mot de passe de « ${st.ok.user} », couper l'accès FTP depuis l'extérieur, remplacer FTP par SFTP et vérifier les fichiers consultés.` : "Bloquer l'IP source et remplacer FTP par SFTP."
+      });
+    }
+
+    /* ---------- 5. Identifiants en clair (HTTP, FTP) ---------- */
+    const seen = new Set();
+    const cred = (r, proto, user, pass, where) => {
+      const k = r.src + '>' + r.dst + '|' + user + '|' + pass;
+      if (seen.has(k)) return;
+      seen.add(k);
+      add({
+        sev: 'haute', type: 'creds', title: `Identifiants en clair (${proto})`, src: r.src, dst: r.dst, ts: r.ts, idx: [r.i], srcRole: 'exposé', dstRole: '',
+        detail: `Le compte « ${user || '?'} » et son mot de passe ${mask(pass)} circulent sans chiffrement vers ${where}. N'importe qui sur le réseau peut les lire (le mot de passe est masqué ici).`,
+        mitre: ['T1552', 'Unsecured Credentials'],
+        conseil: `Changer ce mot de passe et passer le service en ${proto === 'FTP' ? 'SFTP' : 'HTTPS'} pour chiffrer les échanges.`
+      });
+    };
+    const PASS_RE = /(?:^|[?&])(pass|password|passwd|pwd|mdp|mot_?de_?passe|motdepasse)=([^&\s]*)/i;
+    const USER_RE = /(?:^|[?&])(user|username|login|email|identifiant|utilisateur|uname)=([^&\s]*)/i;
+    for (const r of pk) {
+      if (!r.http || !r.http.req) continue;
+      const where = 'http://' + r.http.host + r.http.path.split('?')[0];
+      const auth = r.http.headers.authorization;
+      if (auth && /^basic\s+/i.test(auth)) {
+        const dec = b64(auth.replace(/^basic\s+/i, '').trim()), c = dec.indexOf(':');
+        if (c >= 0) cred(r, 'HTTP Basic', dec.slice(0, c), dec.slice(c + 1), where);
+      }
+      for (const blob of [r.http.body, (r.http.path.split('?')[1] || '')]) {
+        const pm = PASS_RE.exec(blob);
+        if (pm) { const um = USER_RE.exec(blob); cred(r, 'HTTP', um ? urlDec(um[2]) : '', urlDec(pm[2]), where); }
+      }
+    }
+    for (const ok of ftpOk) {
+      if (bruteFtp.has(ok.src + '>' + ok.dst)) continue;
+      cred({ src: ok.src, dst: ok.dst, ts: ok.ts, i: ok.i }, 'FTP', ok.user, ok.pass, 'le serveur FTP ' + ok.dst);
+    }
+
+    /* ---------- 6. ARP spoofing ---------- */
+    const ipMacs = new Map(), macIps = new Map(), replies = new Map();
+    for (const r of pk) {
+      if (!r.arp || r.arp.spa === '0.0.0.0') continue;
+      const m = push(ipMacs, r.arp.spa, () => new Map());
+      const e = push(m, r.arp.sha, () => ({ n: 0, t1: r.ts, t2: r.ts, idx: [] }));
+      e.n++; e.t2 = r.ts; e.idx.push(r.i);
+      push(macIps, r.arp.sha, () => new Set()).add(r.arp.spa);
+      if (r.arp.op === 2) replies.set(r.arp.sha, (replies.get(r.arp.sha) || 0) + 1);
+    }
+    const spoof = new Map();
+    for (const [ip, m] of ipMacs) {
+      if (m.size < 2) continue;
+      const macs = [...m.keys()];
+      const score = x => (macIps.get(x).size > 1 ? 1000 : 0) + (replies.get(x) || 0) * 10 + m.get(x).t1 / 1e9;
+      const sus = macs.sort((x, y) => score(y) - score(x))[0];
+      const s = push(spoof, sus, () => ({ ips: [], legit: [], t1: Infinity, t2: 0, idx: [] }));
+      const e = m.get(sus);
+      s.ips.push(ip); s.legit.push(...macs.filter(x => x !== sus).map(x => ip + ' → ' + x));
+      s.t1 = Math.min(s.t1, e.t1); s.t2 = Math.max(s.t2, e.t2); s.idx.push(...e.idx);
+    }
+    for (const [sus, s] of spoof) {
+      const own = [...(macToIp.get(sus) || [])].filter(ip => !s.ips.includes(ip));
+      const who = own[0] || sus;
+      const stolen = pk.filter(r => !r.arp && r.dstMac === sus && r.src && r.dst !== who && !own.includes(r.dst)).length;
+      add({
+        sev: 'crit', type: 'arpspoof', title: 'ARP spoofing (homme du milieu)', src: who, dst: s.ips.join(', '), ts: s.t1, te: s.t2, idx: s.idx.sort((x, y) => x - y),
+        detail: `La carte réseau ${sus}${own[0] ? ' (' + own[0] + ')' : ''} envoie ${replies.get(sus) || 0} réponses ARP non sollicitées pour se faire passer pour ${s.ips.join(' et ')}. Les vraies adresses : ${s.legit.join(' ; ')}. ${stolen} paquet(s) des victimes ont ainsi été envoyés à l'attaquant au lieu de leur vraie destination.`,
+        mitre: ['T1557.002', 'ARP Cache Poisoning'],
+        conseil: "Débrancher la machine de l'attaquant, activer la protection Dynamic ARP Inspection sur le switch et considérer comme volés tous les mots de passe passés en clair pendant l'attaque."
+      });
+    }
+
+    /* ---------- 7. Tunnel DNS (exfiltration cachée dans des requêtes DNS) ---------- */
+    const dz = new Map();
+    for (const r of pk) {
+      if (!r.dns || r.dns.resp) continue;
+      const labels = r.dns.name.toLowerCase().split('.').filter(Boolean);
+      if (labels.length < 3 || /\.arpa$/.test(r.dns.name)) continue;
+      const base = labels.slice(-2).join('.'), sub = labels.slice(0, -2);
+      const z = push(dz, base, () => ({ names: new Set(), n: 0, len: 0, max: 0, chars: '', qt: new Map(), src: new Set(), t1: r.ts, t2: r.ts, idx: [] }));
+      z.n++; z.t2 = r.ts; z.idx.push(r.i); z.src.add(r.src);
+      if (!z.names.has(r.dns.name)) {
+        z.names.add(r.dns.name);
+        const j = sub.join('');
+        z.len += j.length; z.max = Math.max(z.max, ...sub.map(l => l.length));
+        if (z.chars.length < 20000) z.chars += j;
+      }
+      z.qt.set(r.dns.qtype, (z.qt.get(r.dns.qtype) || 0) + 1);
+    }
+    for (const [base, z] of dz) {
+      const u = z.names.size, avg = u ? z.len / u : 0, ent = entropy(z.chars);
+      if (!((u >= 15 && (avg >= 25 || z.max >= 40) && ent >= 3.5) || u >= 150)) continue;
+      const qt = [...z.qt].sort((a, b) => b[1] - a[1])[0][0];
+      const src = [...z.src];
+      add({
+        sev: 'haute', type: 'dnstunnel', title: 'Tunnel DNS (exfiltration probable)', src: src.join(', '), dst: base, ts: z.t1, te: z.t2, idx: z.idx, srcRole: 'compromis', dstRole: '',
+        detail: `${u} sous-domaines uniques de « ${base} » demandés par ${src.join(', ')}, de ${Math.round(avg)} caractères en moyenne (blocs jusqu'à ${z.max}) et très aléatoires (entropie ${ent.toFixed(2).replace('.', ',')} bits par caractère). Requêtes surtout de type ${PL.QT[qt] || qt}. Un vrai site n'a pas ce profil : des données sont encodées dans les noms, environ ${(z.len * 5 / 8 / 1024).toFixed(1).replace('.', ',')} Ko envoyés.`,
+        mitre: ['T1071.004', 'Application Layer Protocol: DNS'],
+        conseil: `Bloquer le domaine ${base} sur le résolveur DNS, isoler ${src[0]} et chercher le programme malveillant qui envoie ces requêtes.`
+      });
+    }
+
+    /* ---------- Synthèse ---------- */
+    alerts.sort((a, b) => a.ts - b.ts);
+    const bad = new Map();
+    const ROLE = { attaquant: 4, compromis: 3, cible: 2, 'exposé': 1, '': 0 };
+    alerts.forEach((a, k) => {
+      a.n = k + 1;
+      for (const i of a.idx) if (!bad.has(i) || RANK[bad.get(i)] < RANK[a.sev]) bad.set(i, a.sev);
+      const pairs = [[a.src, a.srcRole]].concat(String(a.dst).split(', ').map(d => [d.split(':')[0], a.dstRole]));
+      for (const [ip, role] of pairs) {
+        const h = hosts.get(ip);
+        if (!h) continue;
+        h.alerts.push(a.n);
+        if (ROLE[role] > ROLE[h.role]) h.role = role;
+      }
+    });
+    const worst = alerts.reduce((w, a) => RANK[a.sev] > RANK[w] ? a.sev : w, 'none');
+
+    return {
+      pk, t0, t1, bytes, alerts, bad, worst,
+      protos: [...protos].sort((a, b) => b[1] - a[1]),
+      hosts: [...hosts.values()].sort((a, b) => (b.bout + b.bin) - (a.bout + a.bin)),
+      edges: [...edges.values()]
+    };
+  }
+
+  Object.assign(PL, { analyze, fmtDur, mask, RANK, isPrivate });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* PacketLens — générateur de captures d'exemple.
+   Fabrique de vrais fichiers .pcap (lisibles par Wireshark) qui simulent un petit réseau
+   d'entreprise attaqué. Toutes les adresses sont privées ou réservées à la documentation
+   (192.168.1.0/24, 203.0.113.0/24, 198.51.100.0/24, domaines .example) : aucune donnée réelle. */
+(function (root) {
+  'use strict';
+  const PL = root.PL = root.PL || {};
+
+  function rng(seed) {
+    return function () {
+      seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  const S = s => Array.from(s, c => c.charCodeAt(0) & 255);
+  const MAC = s => s.split(':').map(h => parseInt(h, 16));
+  const IP = s => s.split('.').map(Number);
+  const u16 = n => [(n >> 8) & 255, n & 255];
+  const u24 = n => [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+  const u32 = n => [(n >>> 24) & 255, (n >>> 16) & 255, (n >>> 8) & 255, n & 255];
+  const b64e = s => typeof btoa === 'function' ? btoa(s) : Buffer.from(s, 'latin1').toString('base64');
+
+  function csum(b) {
+    let s = 0;
+    for (let i = 0; i < b.length; i += 2) s += (b[i] << 8) + (b[i + 1] || 0);
+    while (s >>> 16) s = (s & 0xffff) + (s >>> 16);
+    return (~s) & 0xffff;
+  }
+  function ipv4(src, dst, proto, pl, id, ttl) {
+    const h = [0x45, 0, ...u16(20 + pl.length), ...u16(id & 0xffff), 0x40, 0, ttl, proto, 0, 0, ...IP(src), ...IP(dst)];
+    const c = csum(h); h[10] = c >> 8; h[11] = c & 255;
+    return h.concat(pl);
+  }
+  const l4sum = (src, dst, proto, seg) => csum([...IP(src), ...IP(dst), 0, proto, ...u16(seg.length), ...seg]);
+  function tcpSeg(src, dst, sp, dp, flags, seq, ack, pl) {
+    const s = [...u16(sp), ...u16(dp), ...u32(seq), ...u32(ack), 0x50, flags, ...u16(64240), 0, 0, 0, 0].concat(pl);
+    const c = l4sum(src, dst, 6, s); s[16] = c >> 8; s[17] = c & 255;
+    return s;
+  }
+  function udpSeg(src, dst, sp, dp, pl) {
+    const s = [...u16(sp), ...u16(dp), ...u16(8 + pl.length), 0, 0].concat(pl);
+    let c = l4sum(src, dst, 17, s); if (c === 0) c = 0xffff;
+    s[6] = c >> 8; s[7] = c & 255;
+    return s;
+  }
+
+  /* ---------- Le réseau simulé ---------- */
+  const BCAST = 'ff:ff:ff:ff:ff:ff';
+  const GW = { ip: '192.168.1.1', mac: 'a4:2b:b0:12:34:01', name: 'box / passerelle' };
+  const SRV = { ip: '192.168.1.10', mac: '00:1c:42:9a:10:10', name: 'srv-fichiers' };
+  const COMPTA = { ip: '192.168.1.23', mac: '3c:52:82:4e:23:23', name: 'poste compta' };
+  const DEV = { ip: '192.168.1.31', mac: 'f0:18:98:31:31:31', name: 'poste dev' };
+  const RH = { ip: '192.168.1.42', mac: 'd8:bb:c1:42:42:42', name: 'poste RH' };
+  const ATT = { ip: '192.168.1.66', mac: '08:00:27:66:66:66', name: 'VM Kali' };
+  const LAN = [GW, SRV, COMPTA, DEV, RH];
+  const SITES = [
+    ['www.example.com', '203.0.113.10'], ['cdn.example.net', '203.0.113.25'], ['mail.example.org', '198.51.100.7'],
+    ['api.example.com', '203.0.113.40'], ['docs.example.org', '198.51.100.20']
+  ].map(([name, ip]) => ({ name, ip, mac: GW.mac, local: false }));
+  const PORTAIL = { name: 'portail-rh.example.com', ip: '203.0.113.80', mac: GW.mac, local: false };
+  const WORKERS = [COMPTA, DEV, RH];
+
+  class Cap {
+    constructor(seed) { this.r = rng(seed); this.t = Date.UTC(2026, 10, 23, 9, 12, 0) / 1000; this.pk = []; this.ipid = 0x1a00; }
+    wait(s) { this.t += s; }
+    jit(a, b) { return a + (b - a) * this.r(); }
+    pick(a) { return a[Math.floor(this.r() * a.length)]; }
+    rb(n) { const o = new Array(n); for (let i = 0; i < n; i++) o[i] = Math.floor(this.r() * 256); return o; }
+    port() { return 49152 + Math.floor(this.r() * 16000); }
+    seq() { return Math.floor(this.r() * 4294967295); }
+    frame(srcMac, dstMac, type, pl) {
+      this.t += 0.00004 + this.r() * 0.0003;
+      this.pk.push({ ts: this.t, bytes: [...MAC(dstMac), ...MAC(srcMac), ...u16(type)].concat(pl) });
+    }
+    ip(a, b, proto, seg, via) { this.frame(a.mac, via || b.mac, 0x0800, ipv4(a.ip, b.ip, proto, seg, this.ipid++, a.local === false ? 54 : 64)); }
+    tcp(a, b, sp, dp, fl, seq, ack, pl, via) { this.ip(a, b, 6, tcpSeg(a.ip, b.ip, sp, dp, fl, seq >>> 0, ack >>> 0, pl || []), via); }
+    udp(a, b, sp, dp, pl) { this.ip(a, b, 17, udpSeg(a.ip, b.ip, sp, dp, pl)); }
+    icmp(a, b, type, id, sq) {
+      const m = [type, 0, 0, 0, ...u16(id), ...u16(sq), ...S('PacketLens ping 0123456789abcdefghij')];
+      const c = csum(m); m[2] = c >> 8; m[3] = c & 255;
+      this.ip(a, b, 1, m);
+    }
+    arp(op, shaMac, spa, thaMac, tpa, dstMac) {
+      this.frame(shaMac, dstMac, 0x0806, [0, 1, 8, 0, 6, 4, ...u16(op), ...MAC(shaMac), ...IP(spa), ...MAC(thaMac), ...IP(tpa)].concat(new Array(18).fill(0)));
+    }
+    /* Une connexion TCP complète, avec numéros de séquence cohérents. */
+    session(c, s, dp, opt) {
+      opt = opt || {};
+      const cap = this, cp = opt.sport || this.port(), rtt = opt.rtt || 0.0015, via = opt.via;
+      let cs = this.seq(), ss = this.seq();
+      const B = d => typeof d === 'string' ? S(d) : d;
+      const o = {
+        open() {
+          cap.tcp(c, s, cp, dp, 0x02, cs, 0, [], via); cap.wait(rtt);
+          cap.tcp(s, c, dp, cp, 0x12, ss, cs + 1); cs++; ss++; cap.wait(rtt / 4);
+          cap.tcp(c, s, cp, dp, 0x10, cs, ss, [], via);
+          return o;
+        },
+        c(d) { const b = B(d); cap.tcp(c, s, cp, dp, 0x18, cs, ss, b, via); cs += b.length; cap.wait(rtt); cap.tcp(s, c, dp, cp, 0x10, ss, cs); return o; },
+        s(d) { const b = B(d); cap.wait(rtt / 2); cap.tcp(s, c, dp, cp, 0x18, ss, cs, b); ss += b.length; cap.wait(rtt / 4); cap.tcp(c, s, cp, dp, 0x10, cs, ss, [], via); return o; },
+        pause(x) { cap.wait(x); return o; },
+        close() {
+          cap.tcp(c, s, cp, dp, 0x11, cs, ss, [], via); cs++; cap.wait(rtt);
+          cap.tcp(s, c, dp, cp, 0x11, ss, cs); ss++; cap.wait(rtt / 4);
+          cap.tcp(c, s, cp, dp, 0x10, cs, ss, [], via);
+          return o;
+        }
+      };
+      return o;
+    }
+    toPcap() {
+      let total = 24;
+      for (const p of this.pk) total += 16 + Math.max(60, p.bytes.length);
+      const buf = new ArrayBuffer(total), dv = new DataView(buf), u8 = new Uint8Array(buf);
+      dv.setUint32(0, 0xa1b2c3d4, true); dv.setUint16(4, 2, true); dv.setUint16(6, 4, true);
+      dv.setUint32(16, 65535, true); dv.setUint32(20, 1, true);
+      let off = 24;
+      for (const p of this.pk) {
+        const len = Math.max(60, p.bytes.length);
+        let sec = Math.floor(p.ts), us = Math.round((p.ts - sec) * 1e6);
+        if (us >= 1e6) { sec++; us -= 1e6; }
+        dv.setUint32(off, sec, true); dv.setUint32(off + 4, us, true);
+        dv.setUint32(off + 8, len, true); dv.setUint32(off + 12, len, true);
+        u8.set(p.bytes, off + 16);
+        off += 16 + len;
+      }
+      return u8;
+    }
+  }
+
+  /* ---------- Briques de trafic ---------- */
+  function dnsName(n) { const o = []; for (const l of n.split('.')) o.push(l.length, ...S(l)); o.push(0); return o; }
+  const dnsQ = (id, name, qt) => [...u16(id), 0x01, 0x00, 0, 1, 0, 0, 0, 0, 0, 0, ...dnsName(name), ...u16(qt), 0, 1];
+  function dnsR(id, name, qt, ans) {
+    const o = [...u16(id), 0x81, 0x80, 0, 1, ...u16(ans.length), 0, 0, 0, 0, ...dnsName(name), ...u16(qt), 0, 1];
+    for (const a of ans) {
+      const rd = a.ip ? IP(a.ip) : [a.txt.length, ...S(a.txt)];
+      o.push(0xc0, 0x0c, ...u16(a.ip ? 1 : 16), 0, 1, ...u32(300), ...u16(rd.length), ...rd);
+    }
+    return o;
+  }
+  function lookup(cap, who, name, qt, ans) {
+    const id = Math.floor(cap.r() * 65535), p = cap.port();
+    cap.udp(who, GW, p, 53, dnsQ(id, name, qt)); cap.wait(cap.jit(0.004, 0.02));
+    cap.udp(GW, who, 53, p, dnsR(id, name, qt, ans));
+  }
+  function clientHello(cap, host) {
+    const ext = [0, 0, ...u16(host.length + 5), ...u16(host.length + 3), 0, ...u16(host.length), ...S(host)];
+    const body = [3, 3, ...cap.rb(32), 32, ...cap.rb(32), 0, 4, 0x13, 0x01, 0x13, 0x02, 1, 0, ...u16(ext.length), ...ext];
+    const hs = [1, ...u24(body.length), ...body];
+    return [22, 3, 1, ...u16(hs.length), ...hs];
+  }
+  const http200 = body => `HTTP/1.1 200 OK\r\nServer: nginx\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.length}\r\n\r\n${body}`;
+
+  /* Trafic de bureau ordinaire : navigation HTTPS, intranet, partage de fichiers, pings. */
+  function noise(cap, dur) {
+    const end = cap.t + dur;
+    while (cap.t < end) {
+      const x = cap.r(), w = cap.pick(WORKERS);
+      if (x < 0.5) {
+        const site = cap.pick(SITES);
+        lookup(cap, w, site.name, 1, [{ ip: site.ip }]);
+        cap.session(w, site, 443, { rtt: 0.018 }).open().c(clientHello(cap, site.name)).s(cap.rb(1380)).s(cap.rb(640)).c(cap.rb(126)).s(cap.rb(Math.floor(cap.jit(300, 1400)))).close();
+      } else if (x < 0.7) {
+        cap.session(w, SRV, 80).open()
+          .c('GET /intranet/actualites.html HTTP/1.1\r\nHost: intranet.local\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nAccept: text/html\r\n\r\n')
+          .s(http200('<!doctype html><title>Intranet</title><h1>Actualites</h1><p>Reunion d\'equipe jeudi 10h.</p>')).close();
+      } else if (x < 0.85) {
+        const id = Math.floor(cap.r() * 65535);
+        cap.icmp(w, GW, 8, id, 1); cap.wait(0.0006); cap.icmp(GW, w, 0, id, 1);
+      } else {
+        cap.session(w, SRV, 445).open().c(cap.rb(180)).s(cap.rb(420)).c(cap.rb(90)).s(cap.rb(1200)).close();
+      }
+      cap.wait(cap.jit(0.4, 2.4));
+    }
+  }
+
+  function arpSweep(cap) {
+    const live = { [GW.ip]: GW, [SRV.ip]: SRV, [COMPTA.ip]: COMPTA, [DEV.ip]: DEV, [RH.ip]: RH };
+    for (let i = 1; i <= 40; i++) {
+      const ip = '192.168.1.' + i;
+      if (ip === ATT.ip) continue;
+      cap.arp(1, ATT.mac, ATT.ip, '00:00:00:00:00:00', ip, BCAST);
+      if (live[ip]) { cap.wait(0.0007); cap.arp(2, live[ip].mac, ip, ATT.mac, ATT.ip, ATT.mac); }
+      cap.wait(0.012);
+    }
+    for (const h of LAN) { cap.icmp(ATT, h, 8, 0x4c50, 1); cap.wait(0.0005); cap.icmp(h, ATT, 0, 0x4c50, 1); }
+  }
+
+  function portScan(cap) {
+    const top = [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1433, 1723, 3306, 3389, 5432, 5900, 6379, 8080, 8443, 27017];
+    const ports = [...new Set(top.concat(Array.from({ length: 120 }, (_, k) => k + 1)))];
+    for (let k = ports.length - 1; k > 0; k--) { const j = Math.floor(cap.r() * (k + 1)); [ports[k], ports[j]] = [ports[j], ports[k]]; }
+    const openP = new Set([21, 22, 80, 445]), sp = 61734;
+    for (const p of ports) {
+      const sq = cap.seq();
+      cap.tcp(ATT, SRV, sp, p, 0x02, sq, 0);
+      cap.wait(0.0004);
+      if (openP.has(p)) { cap.tcp(SRV, ATT, p, sp, 0x12, cap.seq(), sq + 1); cap.wait(0.0002); cap.tcp(ATT, SRV, sp, p, 0x04, sq + 1, 0); }
+      else cap.tcp(SRV, ATT, p, sp, 0x14, 0, sq + 1);
+      cap.wait(cap.jit(0.002, 0.012));
+    }
+  }
+
+  function sshBrute(cap, n) {
+    for (let k = 0; k < n; k++) {
+      cap.session(ATT, SRV, 22).open()
+        .s('SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5\r\n').c('SSH-2.0-libssh2_1.11.0\r\n')
+        .c(cap.rb(640)).s(cap.rb(1080)).c(cap.rb(48)).s(cap.rb(64)).c(cap.rb(96)).pause(0.25).s(cap.rb(52)).close();
+      cap.wait(cap.jit(1.1, 2.3));
+    }
+  }
+
+  function sshLegit(cap) {
+    cap.session(DEV, SRV, 22).open()
+      .s('SSH-2.0-OpenSSH_9.6p1 Ubuntu-3ubuntu13.5\r\n').c('SSH-2.0-OpenSSH_9.7\r\n')
+      .c(cap.rb(1400)).s(cap.rb(1100)).c(cap.rb(48)).s(cap.rb(500)).c(cap.rb(120)).s(cap.rb(80))
+      .pause(3).c(cap.rb(64)).s(cap.rb(900)).pause(4).c(cap.rb(64)).s(cap.rb(300)).close();
+  }
+
+  function ftpBrute(cap) {
+    const guesses = ['admin', '123456', 'password', 'azerty', 'admin123', 'motdepasse', 'root', 'qwerty', 'Ete2026!'];
+    for (let k = 0; k < guesses.length; k += 3) {
+      const s = cap.session(ATT, SRV, 21).open().s('220 srv-fichiers FTP pret\r\n');
+      for (const pw of guesses.slice(k, k + 3)) {
+        s.c('USER admin\r\n').s('331 Mot de passe requis pour admin\r\n').c('PASS ' + pw + '\r\n').pause(cap.jit(0.6, 1.2));
+        if (pw === 'Ete2026!') {
+          s.s('230 Connexion reussie\r\n').c('PWD\r\n').s('257 "/" est le repertoire courant\r\n')
+            .c('LIST\r\n').s('150 Liste des fichiers\r\n').s('226 Transfert termine\r\n').c('QUIT\r\n').s('221 Au revoir\r\n');
+        } else s.s('530 Identifiants incorrects\r\n');
+      }
+      s.close();
+      cap.wait(cap.jit(0.3, 0.8));
+    }
+  }
+
+  function ftpLegit(cap) {
+    cap.session(COMPTA, SRV, 21).open().s('220 srv-fichiers FTP pret\r\n')
+      .c('USER compta\r\n').s('331 Mot de passe requis pour compta\r\n').c('PASS Factures2026\r\n').s('230 Connexion reussie\r\n')
+      .c('CWD /bilans\r\n').s('250 Repertoire change\r\n').c('QUIT\r\n').s('221 Au revoir\r\n').close();
+  }
+
+  function arpSpoof(cap) {
+    cap.arp(1, COMPTA.mac, COMPTA.ip, '00:00:00:00:00:00', GW.ip, BCAST); cap.wait(0.001);
+    cap.arp(2, GW.mac, GW.ip, COMPTA.mac, COMPTA.ip, COMPTA.mac);
+    noise(cap, 4);
+    for (let k = 0; k < 14; k++) {
+      cap.arp(2, ATT.mac, GW.ip, COMPTA.mac, COMPTA.ip, COMPTA.mac);
+      cap.arp(2, ATT.mac, COMPTA.ip, GW.mac, GW.ip, GW.mac);
+      if (k === 3) {
+        const body = 'identifiant=m.durand&mot_de_passe=Soleil2026%21&rester_connecte=1';
+        cap.session(COMPTA, PORTAIL, 80, { rtt: 0.02, via: ATT.mac }).open()
+          .c(`POST /connexion HTTP/1.1\r\nHost: ${PORTAIL.name}\r\nUser-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64)\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: ${body.length}\r\n\r\n${body}`)
+          .s('HTTP/1.1 302 Found\r\nLocation: /accueil\r\nSet-Cookie: session=8f2c1d9e; HttpOnly\r\nContent-Length: 0\r\n\r\n').close();
+      }
+      if (k === 7) {
+        cap.session(COMPTA, GW, 80, { via: ATT.mac }).open()
+          .c(`GET /admin/ HTTP/1.1\r\nHost: 192.168.1.1\r\nAuthorization: Basic ${b64e('admin:Box-2026')}\r\nUser-Agent: Mozilla/5.0\r\n\r\n`)
+          .s(http200('<!doctype html><title>Box</title><h1>Administration</h1>')).close();
+      }
+      if (k % 3 === 1) {
+        const site = cap.pick(SITES);
+        cap.session(COMPTA, site, 443, { rtt: 0.022, via: ATT.mac }).open().c(clientHello(cap, site.name)).s(cap.rb(1380)).c(cap.rb(126)).close();
+      }
+      cap.wait(cap.jit(1.6, 2.2));
+    }
+  }
+
+  function base32(bytes) {
+    const A = 'abcdefghijklmnopqrstuvwxyz234567';
+    let out = '', bits = 0, val = 0;
+    for (const b of bytes) { val = (val << 8) | b; bits += 8; while (bits >= 5) { out += A[(val >>> (bits - 5)) & 31]; bits -= 5; } }
+    if (bits > 0) out += A[(val << (5 - bits)) & 31];
+    return out;
+  }
+  function dnsTunnel(cap) {
+    const noms = ['Martin', 'Bernard', 'Dubois', 'Thomas', 'Robert', 'Richard', 'Petit', 'Durand', 'Leroy', 'Moreau', 'Simon', 'Laurent', 'Lefebvre', 'Michel', 'Garcia'];
+    let csv = 'client;email;contrat;montant\n';
+    for (let k = 0; k < 40; k++) { const n = noms[k % noms.length]; csv += `${n} ${k + 1};${n.toLowerCase()}.${k + 1}@example.com;C-${1040 + k};${(Math.floor(cap.r() * 9000) + 500)}\n`; }
+    const enc = base32(S('clients.csv|' + csv));
+    lookup(cap, RH, 'beacon.data-sync.example', 16, [{ txt: 'ready' }]);
+    cap.wait(1.5);
+    for (let k = 0, q = 0; k < enc.length; k += 54, q++) {
+      lookup(cap, RH, `${enc.slice(k, k + 54)}.${q.toString(16).padStart(3, '0')}.data-sync.example`, 16, [{ txt: 'ok' }]);
+      cap.wait(cap.jit(0.25, 0.7));
+      if (q % 9 === 4) noise(cap, 0.5);
+    }
+    lookup(cap, RH, 'fin.data-sync.example', 16, [{ txt: 'bye' }]);
+  }
+
+  /* ---------- Les captures proposées ---------- */
+  const SAMPLES = {
+    incident: {
+      label: 'Incident complet', desc: "Une matinée d'attaque : reconnaissance, scan, brute force, ARP spoofing et exfiltration DNS.",
+      build(c) {
+        noise(c, 25); arpSweep(c); c.wait(2); portScan(c); noise(c, 20); sshBrute(c, 26); noise(c, 12);
+        ftpBrute(c); noise(c, 10); ftpLegit(c); noise(c, 12); arpSpoof(c); noise(c, 15); dnsTunnel(c); noise(c, 12);
+      }
+    },
+    scan: { label: 'Scan de ports', desc: 'Découverte du réseau par balayage ARP, puis scan SYN du serveur.', build(c) { noise(c, 15); arpSweep(c); c.wait(1.5); portScan(c); noise(c, 15); } },
+    brute: { label: 'Brute force', desc: 'Hydra contre SSH, puis devinette de mots de passe FTP qui finit par réussir.', build(c) { noise(c, 10); sshBrute(c, 30); noise(c, 6); ftpBrute(c); noise(c, 10); } },
+    arp: { label: 'ARP spoofing', desc: "Empoisonnement ARP d'un poste : son trafic passe par l'attaquant, des mots de passe fuient.", build(c) { noise(c, 10); arpSpoof(c); noise(c, 10); } },
+    dns: { label: 'Tunnel DNS', desc: "Un poste infecté exfiltre un fichier clients caché dans des requêtes DNS.", build(c) { noise(c, 10); dnsTunnel(c); noise(c, 10); } },
+    normal: { label: 'Trafic normal', desc: 'Une journée calme : navigation, intranet, partage de fichiers, SSH légitime.', build(c) { noise(c, 80); sshLegit(c); noise(c, 30); } }
+  };
+
+  function buildSample(key) {
+    let seed = 7;
+    for (const ch of key) seed = (seed * 31 + ch.charCodeAt(0)) | 0;
+    const c = new Cap(seed);
+    SAMPLES[key].build(c);
+    return c.toPcap();
+  }
+
+  Object.assign(PL, { SAMPLES, buildSample });
+})(typeof window !== 'undefined' ? window : globalThis);
+
+</script>
+<script>
+/* PacketLens — interface : chargement, chronologie, alertes, carte, tableaux. */
+{
+  const $ = s => document.querySelector(s);
+  // Tout ce qui vient de la capture est échappé : un fichier piégé ne peut pas injecter de HTML.
+  const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const SEVC = { crit: '#e8452c', haute: '#f39a3d', moy: '#f7e463', info: '#4fc1c6' };
+  const SEVL = { crit: 'Critique', haute: 'Élevée', moy: 'Moyenne', info: 'Info' };
+  const ROLEC = { attaquant: '#e8452c', compromis: '#e8452c', cible: '#f7e463', 'exposé': '#f7e463' };
+  const ROLEL = { attaquant: 'Attaquant', compromis: 'Machine compromise', cible: 'Cible', 'exposé': 'Identifiants exposés' };
+  const PCOL = ['#3b4fd8', '#4fc1c6', '#8c9bff', '#f7e463', '#e86fb0', '#f39a3d', '#6fd3a8', '#a3acd3'];
+  const nf = new Intl.NumberFormat('fr-FR');
+  const inFrame = (() => { try { return window.self !== window.top; } catch (e) { return true; } })();
+
+  let A = null, fileName = '', limit = 300, sel = null, onlyAlert = null, sample = null;
+  let nodes = [], nodeEdges = [];
+
+  const fmtBytes = b => b < 1024 ? b + ' o' : b < 1048576 ? (b / 1024).toFixed(1).replace('.', ',') + ' Ko' : (b / 1048576).toFixed(1).replace('.', ',') + ' Mo';
+  const rel = t => { const s = t - A.t0, m = Math.floor(s / 60); return m ? `${m} min ${String(Math.floor(s % 60)).padStart(2, '0')} s` : s.toFixed(1).replace('.', ',') + ' s'; };
+  const clock = t => new Date(t * 1000).toLocaleTimeString('fr-FR');
+  function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('on'), 3200); }
+
+  function load(buf, name) {
+    try {
+      const cap = PL.readCapture(buf);
+      if (!cap.packets.length) throw new Error('Aucun paquet lisible dans ce fichier.');
+      A = PL.analyze(cap);
+      A.format = cap.format;
+      fileName = name; sel = null; onlyAlert = null; limit = 300;
+      $('#q').value = ''; $('#onlyBad').checked = false;
+      const first = A.hosts.find(h => h.role === 'attaquant' || h.role === 'compromis') || A.hosts[0];
+      sel = first ? first.ip : null;
+      renderAll();
+    } catch (e) { toast(e.message); }
+  }
+
+  function renderAll() {
+    renderStatus(); drawTimeline(); renderAlerts(); layoutGraph(); drawGraph(); renderHost();
+    drawDonut(); renderTalkers(); renderTable();
+  }
+
+  /* ---------- Résumé ---------- */
+  function renderStatus() {
+    const cnt = {};
+    for (const a of A.alerts) cnt[a.sev] = (cnt[a.sev] || 0) + 1;
+    const c = A.worst === 'none' ? 'var(--cyan)' : SEVC[A.worst];
+    const verdict = A.worst === 'none' ? 'Rien de suspect détecté' : A.worst === 'crit' ? 'Attaque en cours ou réussie' : A.worst === 'haute' ? 'Activité malveillante probable' : 'Activité à surveiller';
+    const kpi = [['Paquets', nf.format(A.pk.length)], ['Durée', PL.fmtDur(A.t1 - A.t0)], ['Volume', fmtBytes(A.bytes)], ['Machines', nf.format(A.hosts.length)]];
+    $('#status').innerHTML = `<p class="file">Fichier <b>${esc(fileName)}</b> · format ${esc(A.format)} · début ${A.t0 ? esc(new Date(A.t0 * 1000).toLocaleString('fr-FR')) : 'inconnu'}</p>
+      <div class="kpis">${kpi.map(([l, v]) => `<div class="kpi"><b>${v}</b><span>${l}</span></div>`).join('')}
+      <div class="kpi verdict" style="--c:${c}"><b>${A.alerts.length ? nf.format(A.alerts.length) + ' alerte' + (A.alerts.length > 1 ? 's' : '') : 'Aucune alerte'}</b><span>${verdict}</span>
+      <div class="sevs">${['crit', 'haute', 'moy', 'info'].filter(s => cnt[s]).map(s => `<span class="pill" style="--c:${SEVC[s]}">${cnt[s]} ${SEVL[s].toLowerCase()}</span>`).join('')}</div></div></div>`;
+  }
+
+  /* ---------- Chronologie ---------- */
+  function drawTimeline() {
+    const fig = $('#tl'), s = $('#tlsvg');
+    if (!A) return;
+    const lanes = A.alerts.length;
+    fig.style.height = (150 + (lanes ? 16 + lanes * 26 : 0) + 6) + 'px';
+    const W = s.clientWidth, H = s.clientHeight;
+    if (!W) return;
+    const L = 6, R = 6, hH = 110, dur = Math.max(A.t1 - A.t0, 0.001);
+    const x = t => L + (t - A.t0) / dur * (W - L - R);
+    const nb = Math.max(20, Math.min(220, Math.floor(W / 5)));
+    const bins = new Array(nb).fill(0), badb = new Array(nb).fill(0);
+    for (const r of A.pk) {
+      const b = Math.min(nb - 1, Math.floor((r.ts - A.t0) / dur * nb));
+      bins[b]++;
+      if (A.bad.has(r.i)) badb[b]++;
+    }
+    const max = Math.max(1, ...bins), sq = v => Math.sqrt(v / max), bw = (W - L - R) / nb;
+    let out = '';
+    for (let i = 0; i < nb; i++) {
+      if (!bins[i]) continue;
+      const h = Math.max(2, sq(bins[i]) * (hH - 22)), hb = h * badb[i] / bins[i];
+      out += `<rect x="${(L + i * bw).toFixed(1)}" y="${(hH - h).toFixed(1)}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${h.toFixed(1)}" rx="1" fill="#3b4fd8"/>`;
+      if (badb[i]) out += `<rect x="${(L + i * bw).toFixed(1)}" y="${(hH - hb).toFixed(1)}" width="${Math.max(1, bw - 1).toFixed(1)}" height="${Math.max(1.5, hb).toFixed(1)}" rx="1" fill="#f39a3d"/>`;
+    }
+    out += `<line x1="${L}" x2="${W - R}" y1="${hH + .5}" y2="${hH + .5}" stroke="#26346f"/>`;
+    const nt = W < 520 ? 3 : 6;
+    for (let k = 0; k <= nt; k++) {
+      const t = A.t0 + dur * k / nt, xx = x(t);
+      const anchor = k === 0 ? 'start' : k === nt ? 'end' : 'middle';
+      out += `<line x1="${xx}" x2="${xx}" y1="${hH}" y2="${hH + 5}" stroke="#26346f"/><text x="${xx}" y="${hH + 22}" fill="#a3acd3" font-size="13" text-anchor="${anchor}">${k === 0 ? esc(clock(A.t0)) : '+' + esc(rel(t))}</text>`;
+    }
+    out += `<text x="${L}" y="14" fill="#a3acd3" font-size="13">${nf.format(max)} paquets au maximum par tranche de ${esc(PL.fmtDur(dur / nb))} (échelle en racine carrée)</text>`;
+    A.alerts.forEach((a, k) => {
+      const y = hH + 40 + k * 26, xs = x(a.ts), xe = Math.max(xs + 8, x(a.te));
+      const label = `${a.n}. ${a.title}`, tw = label.length * 7.2;
+      const right = xe + 8 + tw < W, tx = right ? xe + 8 : Math.max(L + tw, xs - 8);
+      out += `<g class="lane" data-n="${a.n}" tabindex="0" role="button" aria-label="Alerte ${a.n} : ${esc(a.title)}">
+        <rect x="0" y="${y - 4}" width="${W}" height="24" fill="transparent"/>
+        <line x1="${L}" x2="${W - R}" y1="${y + 8}" y2="${y + 8}" stroke="#172456"/>
+        <rect class="bar" x="${xs.toFixed(1)}" y="${y + 1}" width="${(xe - xs).toFixed(1)}" height="14" rx="4" fill="${SEVC[a.sev]}"/>
+        <text x="${tx.toFixed(1)}" y="${y + 13}" fill="#eef0fa" font-size="13" text-anchor="${right ? 'start' : 'end'}">${esc(label)}</text>
+        <title>${esc(a.title)} · ${esc(rel(a.ts))} → ${esc(rel(a.te))}</title></g>`;
+    });
+    s.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    s.innerHTML = out;
+  }
+
+  /* ---------- Alertes ---------- */
+  const mitreUrl = id => 'https://attack.mitre.org/techniques/' + id.replace('.', '/') + '/';
+  function renderAlerts() {
+    const el = $('#alerts');
+    if (!A.alerts.length) {
+      el.innerHTML = `<div class="empty"><b>Aucune alerte</b>PacketLens n'a trouvé aucun des comportements qu'il sait reconnaître : scan de ports, balayage du réseau, brute force, ARP spoofing, tunnel DNS ou identifiants envoyés en clair.</div>`;
+      return;
+    }
+    el.innerHTML = A.alerts.map(a => `<article class="alert" id="al-${a.n}" style="--c:${SEVC[a.sev]}">
+      <header><span class="n">${a.n}</span><h3>${esc(a.title)}</h3><span class="pill" style="--c:${SEVC[a.sev]}">${SEVL[a.sev]}</span></header>
+      <p class="meta">${esc(clock(a.ts))} (+${esc(rel(a.ts))}) · ${esc(a.src)} → ${esc(a.dst)}</p>
+      <p>${esc(a.detail)}</p>
+      <p class="tip"><b>À faire :</b> ${esc(a.conseil)}</p>
+      <footer><a href="${mitreUrl(a.mitre[0])}" target="_blank" rel="noopener">MITRE ATT&amp;CK ${esc(a.mitre[0])} · ${esc(a.mitre[1])}</a>
+      <button type="button" data-show="${a.n}">Voir ${a.idx.length > 1 ? 'les ' + nf.format(a.idx.length) + ' paquets' : 'le paquet'}</button></footer></article>`).join('');
+  }
+  function focusAlert(n) {
+    const el = $('#al-' + n);
+    if (!el) return;
+    el.scrollIntoView({ block: 'center' });
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 1400);
+  }
+
+  /* ---------- Carte des échanges (graphe à ressorts, calculé une fois) ---------- */
+  function layoutGraph() {
+    const top = A.hosts.filter(h => !/^(255\.|0\.0\.0\.0|224\.|ff0)/.test(h.ip)).slice(0, 40);
+    const idx = new Map(top.map((h, i) => [h.ip, i]));
+    nodes = top.map((h, i) => {
+      const ang = i / top.length * Math.PI * 2;
+      return { h, x: 0.5 + 0.35 * Math.cos(ang), y: 0.5 + 0.35 * Math.sin(ang), dx: 0, dy: 0 };
+    });
+    nodeEdges = A.edges.filter(e => idx.has(e.a) && idx.has(e.b) && e.a !== e.b).map(e => ({ e, s: idx.get(e.a), t: idx.get(e.b) }));
+    const n = nodes.length;
+    if (!n) return;
+    const k = 0.9 * Math.sqrt(1 / n);
+    let temp = 0.1;
+    for (let it = 0; it < 350; it++) {
+      for (const a of nodes) { a.dx = 0; a.dy = 0; }
+      for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) {
+        const a = nodes[i], b = nodes[j];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        const d = Math.max(0.01, Math.hypot(dx, dy)), f = k * k / d;
+        dx /= d; dy /= d;
+        a.dx += dx * f; a.dy += dy * f; b.dx -= dx * f; b.dy -= dy * f;
+      }
+      for (const { s, t } of nodeEdges) {
+        const a = nodes[s], b = nodes[t];
+        let dx = a.x - b.x, dy = a.y - b.y;
+        const d = Math.max(0.01, Math.hypot(dx, dy)), f = d * d / k;
+        dx /= d; dy /= d;
+        a.dx -= dx * f; a.dy -= dy * f; b.dx += dx * f; b.dy += dy * f;
+      }
+      for (const a of nodes) {
+        a.dx += (0.5 - a.x) * 0.6; a.dy += (0.5 - a.y) * 0.6;
+        const d = Math.max(1e-6, Math.hypot(a.dx, a.dy)), m = Math.min(d, temp);
+        a.x += a.dx / d * m; a.y += a.dy / d * m;
+      }
+      temp *= 0.985;
+    }
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const a of nodes) { x0 = Math.min(x0, a.x); x1 = Math.max(x1, a.x); y0 = Math.min(y0, a.y); y1 = Math.max(y1, a.y); }
+    for (const a of nodes) { a.x = (a.x - x0) / Math.max(1e-6, x1 - x0); a.y = (a.y - y0) / Math.max(1e-6, y1 - y0); }
+  }
+  const nodeColor = h => ROLEC[h.role] || (h.local ? '#3b4fd8' : '#4fc1c6');
+  const nodeR = h => 6 + Math.min(16, Math.log10(1 + h.bout + h.bin) * 2.2);
+  function placed(W, H) {
+    const px = 70, py = 34;
+    return nodes.map(a => ({ a, X: px + a.x * (W - 2 * px), Y: py + a.y * (H - 2 * py - 16) }));
+  }
+  function drawGraph() {
+    const cv = $('#graph'), W = cv.clientWidth, H = cv.clientHeight;
+    if (!W || !A) return;
+    const dpr = window.devicePixelRatio || 1;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const g = cv.getContext('2d');
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.clearRect(0, 0, W, H);
+    const P = placed(W, H);
+    const hot = new Map();
+    for (const a of A.alerts) for (const d of String(a.dst).split(', ')) hot.set(a.src + '|' + d.split(':')[0], a.sev);
+    for (const { e, s, t } of nodeEdges) {
+      const A1 = P[s], B1 = P[t];
+      const sev = hot.get(e.a + '|' + e.b) || hot.get(e.b + '|' + e.a);
+      const on = sel && (e.a === sel || e.b === sel);
+      g.strokeStyle = sev ? SEVC[sev] : on ? 'rgba(238,240,250,.7)' : 'rgba(163,172,211,.28)';
+      g.lineWidth = (sev ? 1.5 : 0.6) + Math.log10(1 + e.bytes) * 0.45;
+      g.beginPath(); g.moveTo(A1.X, A1.Y); g.lineTo(B1.X, B1.Y); g.stroke();
+    }
+    g.font = '500 12px "Red Hat Mono", monospace';
+    g.textAlign = 'center';
+    for (const { a, X, Y } of P) {
+      const r = nodeR(a.h);
+      g.beginPath(); g.arc(X, Y, r, 0, Math.PI * 2);
+      g.fillStyle = nodeColor(a.h); g.fill();
+      g.lineWidth = a.h.ip === sel ? 3 : 1.5;
+      g.strokeStyle = a.h.ip === sel ? '#ffffff' : 'rgba(11,20,51,.9)';
+      g.stroke();
+      g.fillStyle = a.h.ip === sel ? '#ffffff' : '#c9cfea';
+      g.fillText(a.h.ip, X, Y + r + 14);
+    }
+  }
+  function graphClick(ev) {
+    const cv = $('#graph'), b = cv.getBoundingClientRect();
+    const mx = ev.clientX - b.left, my = ev.clientY - b.top;
+    let best = null, bd = Infinity;
+    for (const p of placed(cv.clientWidth, cv.clientHeight)) {
+      const d = Math.hypot(p.X - mx, p.Y - my);
+      if (d < nodeR(p.a.h) + 10 && d < bd) { bd = d; best = p.a.h; }
+    }
+    if (best) { sel = best.ip; drawGraph(); renderHost(); }
+  }
+
+  function renderHost() {
+    const el = $('#host'), h = A.hosts.find(x => x.ip === sel);
+    if (!h) { el.innerHTML = '<p class="note">Cliquez sur une machine de la carte.</p>'; return; }
+    const ports = [...h.ports].sort((a, b) => a - b);
+    const role = ROLEL[h.role] || (h.local ? 'Machine du réseau local' : 'Machine sur Internet');
+    el.innerHTML = `<h3>${esc(h.ip)}</h3><p class="role" style="color:${ROLEC[h.role] || 'var(--mute)'}">${esc(role)}</p>
+      <dl>
+        <dt>Adresse${h.macs.size > 1 ? 's' : ''} MAC</dt><dd>${h.macs.size ? [...h.macs].map(m => `<code>${esc(m)}</code>`).join(', ') + (h.macs.size > 1 ? ' <b style="color:var(--red)">· plusieurs cartes pour une IP</b>' : '') : '—'}</dd>
+        <dt>Envoyé</dt><dd>${nf.format(h.out)} paquets · ${fmtBytes(h.bout)}</dd>
+        <dt>Reçu</dt><dd>${nf.format(h.inn)} paquets · ${fmtBytes(h.bin)}</dd>
+        <dt>Protocoles</dt><dd>${esc([...h.protos].join(', '))}</dd>
+        <dt>Ports contactés</dt><dd>${ports.length ? esc(ports.slice(0, 18).join(', ')) + (ports.length > 18 ? ` et ${ports.length - 18} autres` : '') : '—'}</dd>
+        <dt>Correspondants</dt><dd>${h.peers.size}</dd>
+      </dl>
+      <div class="links">${h.alerts.map(n => `<button type="button" data-goto="${n}">Alerte ${n}</button>`).join('')}
+      <button type="button" data-filter="${esc(h.ip)}">Voir ses paquets</button></div>`;
+  }
+
+  /* ---------- Protocoles et machines actives ---------- */
+  function drawDonut() {
+    const s = $('#donut'), W = s.clientWidth, H = s.clientHeight;
+    const total = A.pk.length;
+    let rows = A.protos.slice(0, 7);
+    const rest = A.protos.slice(7).reduce((t, p) => t + p[1], 0);
+    if (rest) rows = rows.concat([['Autres', rest]]);
+    $('#plegend').innerHTML = rows.map(([p, n], i) => `<div class="prow"><span>${esc(p)}</span><span class="meter"><i style="width:${(n / total * 100).toFixed(1)}%;--c:${PCOL[i]}"></i></span><b>${(n / total * 100).toFixed(1).replace('.', ',')} %</b></div>`).join('');
+    if (!W) return;
+    const cx = W / 2, cy = H / 2, R = Math.min(W, H) / 2 - 4, r = R * 0.62;
+    let a0 = -Math.PI / 2, out = '';
+    rows.forEach(([, n], i) => {
+      const a1 = a0 + n / total * Math.PI * 2 - (rows.length > 1 ? 0.012 : 0.0001);
+      const big = a1 - a0 > Math.PI ? 1 : 0;
+      const p = (rad, a) => `${(cx + rad * Math.cos(a)).toFixed(2)} ${(cy + rad * Math.sin(a)).toFixed(2)}`;
+      out += `<path d="M${p(R, a0)}A${R} ${R} 0 ${big} 1 ${p(R, a1)}L${p(r, a1)}A${r} ${r} 0 ${big} 0 ${p(r, a0)}Z" fill="${PCOL[i]}"/>`;
+      a0 += n / total * Math.PI * 2;
+    });
+    out += `<text x="${cx}" y="${cy - 2}" text-anchor="middle" fill="#eef0fa" font-family="Red Hat Display" font-weight="800" font-size="26">${nf.format(total)}</text><text x="${cx}" y="${cy + 18}" text-anchor="middle" fill="#a3acd3" font-size="13">paquets</text>`;
+    s.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    s.innerHTML = out;
+  }
+  function renderTalkers() {
+    const top = A.hosts.slice(0, 8), max = Math.max(1, ...top.map(h => h.bout + h.bin));
+    $('#talkers').innerHTML = top.map(h => `<button type="button" class="trow" data-host="${esc(h.ip)}"><span>${esc(h.ip)}${h.role ? `<span class="tag" style="--c:${ROLEC[h.role]}">${esc(h.role)}</span>` : ''}</span>
+      <span class="meter"><i style="width:${((h.bout + h.bin) / max * 100).toFixed(1)}%;--c:${nodeColor(h)}"></i></span><b>${fmtBytes(h.bout + h.bin)}</b></button>`).join('');
+  }
+
+  /* ---------- Table des paquets ---------- */
+  function rowText(r) { return r._s || (r._s = `${r.src} ${r.dst} ${r.proto} ${r.sport ?? ''} ${r.dport ?? ''} ${r.srcMac || ''} ${r.info}`.toLowerCase()); }
+  function renderTable() {
+    const q = $('#q').value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    const onlyBad = $('#onlyBad').checked;
+    const set = onlyAlert ? new Set(A.alerts[onlyAlert - 1].idx) : null;
+    const rows = A.pk.filter(r => (!set || set.has(r.i)) && (!onlyBad || A.bad.has(r.i)) && q.every(t => rowText(r).includes(t)));
+    const shown = rows.slice(0, limit);
+    $('#ptable tbody').innerHTML = shown.map(r => {
+      const sev = A.bad.get(r.i);
+      return `<tr${sev ? ` class="bad" style="--c:${SEVC[sev]}"` : ''}><td class="num">${r.i + 1}</td><td class="num">${(r.ts - A.t0).toFixed(3).replace('.', ',')}</td><td>${esc(r.src || r.srcMac || '')}</td><td>${esc(r.dst || r.dstMac || '')}</td><td>${esc(r.proto)}</td><td class="num">${r.len}</td><td>${esc(r.info)}</td></tr>`;
+    }).join('') || '<tr><td colspan="7">Aucun paquet ne correspond au filtre.</td></tr>';
+    $('#count').innerHTML = `${nf.format(shown.length)} paquets affichés sur ${nf.format(rows.length)} correspondants (${nf.format(A.pk.length)} au total)` +
+      (onlyAlert ? ` <button type="button" id="clearAlert">Paquets de l'alerte ${onlyAlert} · retirer ce filtre</button>` : '');
+    $('#more').hidden = rows.length <= limit;
+  }
+
+  /* ---------- Rapport JSON ---------- */
+  function report() {
+    return {
+      outil: 'PacketLens', fichier: fileName, format: A.format, genere_le: new Date().toISOString(),
+      capture: { debut: new Date(A.t0 * 1000).toISOString(), fin: new Date(A.t1 * 1000).toISOString(), paquets: A.pk.length, octets: A.bytes, machines: A.hosts.length },
+      protocoles: Object.fromEntries(A.protos),
+      alertes: A.alerts.map(a => ({ numero: a.n, gravite: SEVL[a.sev], type: a.type, titre: a.title, debut: new Date(a.ts * 1000).toISOString(), fin: new Date(a.te * 1000).toISOString(), source: a.src, destination: a.dst, detail: a.detail, recommandation: a.conseil, mitre: { id: a.mitre[0], nom: a.mitre[1], url: mitreUrl(a.mitre[0]) }, paquets: a.idx.map(i => i + 1) })),
+      machines: A.hosts.slice(0, 50).map(h => ({ ip: h.ip, role: h.role || null, macs: [...h.macs], paquets_envoyes: h.out, paquets_recus: h.inn, octets: h.bout + h.bin, ports_contactes: [...h.ports].sort((a, b) => a - b), alertes: h.alerts }))
+    };
+  }
+
+  /* ---------- Événements ---------- */
+  $('#samples').innerHTML = Object.entries(PL.SAMPLES).map(([k, s]) => `<button type="button" data-sample="${k}" aria-pressed="false">${esc(s.label)}</button>`).join('');
+  function loadSample(k) {
+    sample = k;
+    for (const b of document.querySelectorAll('[data-sample]')) b.setAttribute('aria-pressed', String(b.dataset.sample === k));
+    $('#sdesc').textContent = PL.SAMPLES[k].desc;
+    const u8 = PL.buildSample(k);
+    load(u8.buffer, `exemple-${k}.pcap`);
+  }
+  function loadFile(f) {
+    if (!f) return;
+    if (f.size > 300 * 1048576) { toast('Fichier trop gros (plus de 300 Mo) pour être analysé dans le navigateur.'); return; }
+    sample = null;
+    for (const b of document.querySelectorAll('[data-sample]')) b.setAttribute('aria-pressed', 'false');
+    $('#sdesc').textContent = '';
+    f.arrayBuffer().then(b => load(b, f.name), () => toast('Impossible de lire ce fichier.'));
+  }
+  $('#file').addEventListener('change', e => { loadFile(e.target.files[0]); e.target.value = ''; });
+  const drop = $('#drop');
+  for (const ev of ['dragenter', 'dragover']) document.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); });
+  for (const ev of ['dragleave', 'drop']) document.addEventListener(ev, e => { e.preventDefault(); if (ev === 'drop' || !e.relatedTarget) drop.classList.remove('over'); });
+  document.addEventListener('drop', e => loadFile(e.dataTransfer && e.dataTransfer.files[0]));
+
+  document.addEventListener('click', e => {
+    const t = e.target.closest('button, .lane');
+    if (!t) return;
+    const d = t.dataset;
+    if (d.sample) loadSample(d.sample);
+    else if (d.show) { onlyAlert = +d.show; limit = 300; renderTable(); $('#packets').scrollIntoView(); }
+    else if (d.n) focusAlert(+d.n);
+    else if (d.goto) focusAlert(+d.goto);
+    else if (d.filter) { $('#q').value = d.filter; onlyAlert = null; limit = 300; renderTable(); $('#packets').scrollIntoView(); }
+    else if (d.host) { sel = d.host; drawGraph(); renderHost(); $('#gfig').scrollIntoView({ block: 'center' }); }
+    else if (t.id === 'clearAlert') { onlyAlert = null; renderTable(); }
+  });
+  $('#tlsvg').addEventListener('keydown', e => { const g = e.target.closest('.lane'); if (g && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); focusAlert(+g.dataset.n); } });
+  $('#graph').addEventListener('click', graphClick);
+  $('#q').addEventListener('input', () => { limit = 300; renderTable(); });
+  $('#onlyBad').addEventListener('change', () => { limit = 300; renderTable(); });
+  $('#more').addEventListener('click', () => { limit += 500; renderTable(); });
+  $('#export').addEventListener('click', () => {
+    const text = JSON.stringify(report(), null, 2);
+    navigator.clipboard.writeText(text).then(() => toast('Rapport JSON copié dans le presse-papiers.'), () => toast('Copie refusée par le navigateur. Utilisez « Télécharger le rapport ».'));
+  });
+  const dl = $('#download');
+  dl.hidden = inFrame;
+  dl.addEventListener('click', () => {
+    const blob = new Blob([JSON.stringify(report(), null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'packetlens-rapport-' + fileName.replace(/\.[^.]+$/, '') + '.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+  });
+  const roTl = new ResizeObserver(() => drawTimeline()); roTl.observe($('#tl'));
+  const roG = new ResizeObserver(() => drawGraph()); roG.observe($('#gfig'));
+  const roD = new ResizeObserver(() => A && drawDonut()); roD.observe($('#dfig'));
+  if (document.fonts) document.fonts.ready.then(() => A && drawGraph());
+
+  loadSample('incident');
+}
+
+</script>
 </body>
 </html>
