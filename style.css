@@ -1,0 +1,151 @@
+/* VOICE: un instrument d'analyste, précis et calme, sans effet
+   IDEA: la sonde réseau / l'oscilloscope : la capture se lit comme un signal dans le temps
+   PICTURE: la chronologie du trafic avec les bandes d'alertes, puis la carte des machines
+   COLOUR and TYPE: fond marine #0b1433, échelle bleu → cyan → jaune → rouge pour la gravité ; Red Hat Display 800, Red Hat Text, Red Hat Mono
+   LAYOUT: en-tête compact avec le chargeur, chronologie pleine largeur, alertes | carte, protocoles | machines, table des paquets */
+:root{color-scheme:dark;--bg:#0b1433;--panel:#111c45;--panel2:#172456;--line:#26346f;--ink:#eef0fa;--mute:#a3acd3;--blue:#3b4fd8;--blue2:#5a6cf0;--cyan:#4fc1c6;--yel:#f7e463;--org:#f39a3d;--red:#e8452c;
+  --mono:"Red Hat Mono",ui-monospace,Menlo,Consolas,monospace;--disp:"Red Hat Display",system-ui,sans-serif}
+:root[data-theme=light],:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html{scroll-padding-top:24px;scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.55 "Red Hat Text",system-ui,sans-serif;overflow-x:clip}
+a{color:var(--cyan)}
+h1,h2,h3{font-family:var(--disp);margin:0;line-height:1.05;text-wrap:balance}
+h1{font-size:clamp(34px,5vw,52px);font-weight:800;letter-spacing:-.01em}
+h2{font-size:24px;font-weight:800;margin-bottom:8px}
+h3{font-size:17px;font-weight:800;line-height:1.25}
+p{margin:0}
+.band{padding:clamp(22px,3.4vw,48px) max(5vw,16px)}
+.band>*{max-width:1240px;margin-inline:auto}
+.fig{position:relative;min-height:220px}
+.fig>svg,.fig>canvas{position:absolute;inset:0;width:100%;height:100%}
+pre,.scroll{overflow-x:auto}
+code{overflow-wrap:anywhere}
+.note{color:var(--mute);font-size:15px;max-width:70ch;margin-bottom:14px}
+.small{font-size:14px}
+button,.drop,input[type=search]{font:inherit;color:inherit}
+button{min-height:44px;padding:0 16px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);cursor:pointer;font-weight:500}
+button:hover{border-color:var(--blue2)}
+button:focus-visible,input:focus-visible,.drop:focus-within{outline:3px solid var(--cyan);outline-offset:2px}
+
+/* En-tête */
+.top{background:linear-gradient(180deg,#0e1a44,var(--bg));border-bottom:1px solid var(--line);padding-bottom:28px}
+.top{display:grid;gap:24px}
+.top>*{width:100%}
+.brand{display:flex;gap:18px;align-items:flex-start}
+.logo{width:56px;height:56px;flex:none;color:var(--ink);margin-top:2px}
+.lede{color:var(--mute);margin-top:10px;max-width:62ch;font-size:17px}
+.load{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:24px;align-items:start}
+.drop{display:grid;gap:2px;place-content:center;text-align:center;min-height:112px;padding:16px;border:2px dashed var(--blue2);border-radius:14px;background:rgba(59,79,216,.12);cursor:pointer;transition:background .2s}
+.drop.over{background:rgba(79,193,198,.2);border-color:var(--cyan)}
+.drop input{position:absolute;width:1px;height:1px;opacity:0}
+.drop strong{font-family:var(--disp);font-size:20px}
+.drop span{color:var(--mute);font-size:14px}
+.hint{color:var(--mute);margin-bottom:8px;font-size:15px}
+.hint.small{margin:10px 0 0;font-size:14px;min-height:1.5em}
+.samples{display:flex;flex-wrap:wrap;gap:8px}
+.samples button[aria-pressed=true]{background:var(--blue);border-color:var(--blue2)}
+
+/* Résumé */
+.status{padding-block:22px 6px}
+.file{color:var(--mute);font-size:15px;margin-bottom:14px;overflow-wrap:anywhere}
+.file b{color:var(--ink);font-family:var(--mono);font-weight:500}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) minmax(0,1.6fr);gap:10px}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+.kpi b{display:block;font-family:var(--disp);font-size:clamp(24px,3vw,32px);font-weight:800;line-height:1.1;white-space:nowrap}
+.kpi span{color:var(--mute);font-size:14px}
+.verdict{border-color:var(--c,var(--line));background:linear-gradient(90deg,color-mix(in srgb,var(--c,var(--panel)) 22%,var(--panel)),var(--panel))}
+.verdict b{color:var(--c,var(--ink))}
+.sevs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:13px;padding:2px 9px;border-radius:99px;background:color-mix(in srgb,var(--c) 18%,transparent);color:var(--ink);white-space:nowrap}
+.pill::before{content:"";width:8px;height:8px;border-radius:50%;background:var(--c)}
+
+/* Chronologie */
+#tl{min-height:200px}
+#tlsvg text{font-family:"Red Hat Text",sans-serif}
+.lane{cursor:pointer}
+.lane:hover rect.bar{filter:brightness(1.2)}
+
+/* Alertes + carte */
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:clamp(20px,3vw,40px)}
+.split>*{width:100%}
+.band.split{max-width:none}
+.band.split{padding-inline:max(5vw,16px)}
+@media(min-width:1340px){.band.split{padding-inline:calc((100vw - 1240px)/2)}}
+.alerts{display:grid;gap:12px}
+.alert{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--c);border-radius:12px;padding:14px 16px;transition:box-shadow .3s}
+.alert.flash{box-shadow:0 0 0 3px var(--c)}
+.alert header{display:flex;gap:10px;align-items:center}
+.alert .n{flex:none;width:28px;height:28px;border-radius:50%;display:grid;place-items:center;background:var(--c);color:#0b1433;font-weight:700;font-size:14px}
+.alert h3{flex:1}
+.alert .pill{flex:none}
+.alert .meta{font-family:var(--mono);font-size:13px;color:var(--mute);margin:8px 0 6px;overflow-wrap:anywhere}
+.alert .tip{margin-top:8px;font-size:15px;color:var(--mute)}
+.alert .tip b{color:var(--ink)}
+.alert footer{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;margin-top:12px}
+.alert footer a{font-size:14px}
+.empty{background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--cyan);border-radius:12px;padding:18px}
+.empty b{font-family:var(--disp);font-size:20px;display:block;margin-bottom:4px}
+.graph{min-height:440px;background:radial-gradient(circle at 50% 45%,#16235a,var(--panel) 70%);border:1px solid var(--line);border-radius:14px;cursor:crosshair}
+.legend{list-style:none;padding:0;margin:10px 0 0;display:flex;flex-wrap:wrap;gap:6px 16px;font-size:14px;color:var(--mute)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;background:var(--c);margin-right:6px}
+.host{margin-top:14px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
+.host h3{font-family:var(--mono);font-weight:500;font-size:20px}
+.host .role{color:var(--mute);font-size:14px;margin:4px 0 10px}
+.host dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:4px 14px;margin:0 0 12px;font-size:15px}
+.host dt{color:var(--mute)}
+.host dd{margin:0;overflow-wrap:anywhere}
+.host dd code{font-family:var(--mono);font-size:14px}
+.host .links{display:flex;flex-wrap:wrap;gap:8px}
+
+/* Protocoles + machines */
+.donutwrap{display:grid;grid-template-columns:minmax(0,220px) minmax(0,1fr);gap:20px;align-items:center}
+.donut{min-height:220px}
+.plegend,.talkers{display:grid;gap:8px}
+.prow,.trow{display:grid;grid-template-columns:minmax(0,9em) minmax(0,1fr) 5.5em;gap:10px;align-items:center;font-size:15px}
+.trow{grid-template-columns:minmax(0,12em) minmax(0,1fr) 6.5em;background:none;border:0;padding:4px 0;min-height:36px;text-align:left;border-radius:6px}
+.trow:hover .meter i{filter:brightness(1.25)}
+.prow span:first-child,.trow span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.trow span:first-child{font-family:var(--mono);font-size:14px}
+.meter{height:10px;border-radius:5px;background:var(--panel2);overflow:hidden}
+.meter i{display:block;height:100%;border-radius:5px;background:var(--c,var(--blue2))}
+.prow b,.trow b{font-weight:500;text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.tag{font-size:12px;padding:1px 6px;border-radius:4px;margin-left:6px;background:color-mix(in srgb,var(--c) 25%,transparent);font-family:"Red Hat Text",sans-serif}
+
+/* Paquets */
+.head.row{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between}
+.tools{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+input[type=search]{min-height:44px;font-size:16px;padding:0 14px;border-radius:8px;border:1px solid var(--line);background:var(--panel);width:min(320px,100%)}
+.chk{display:flex;gap:8px;align-items:center;min-height:44px;font-size:15px;cursor:pointer}
+.chk input{width:18px;height:18px;accent-color:var(--cyan)}
+.count{color:var(--mute);font-size:14px;margin:12px 0 8px;display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.count button{min-height:32px;padding:0 10px;font-size:14px}
+table{width:100%;border-collapse:collapse;font-size:14px}
+th{text-align:left;color:var(--mute);font-weight:500;padding:8px 10px;border-bottom:1px solid var(--line);white-space:nowrap;position:sticky;top:0;background:var(--bg)}
+td{padding:6px 10px;border-bottom:1px solid rgba(38,52,111,.6);font-family:var(--mono);font-size:13px;vertical-align:top}
+td.num,th.num{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+td:nth-child(3),td:nth-child(4),td:nth-child(5){white-space:nowrap}
+td:last-child{font-family:"Red Hat Text",sans-serif;font-size:14px;overflow-wrap:anywhere;min-width:18em}
+tr.bad td:first-child{box-shadow:inset 4px 0 0 var(--c)}
+tr.bad{background:color-mix(in srgb,var(--c) 9%,transparent)}
+.scroll{max-height:620px;overflow:auto;border:1px solid var(--line);border-radius:12px}
+.more{margin-top:12px}
+.foot{border-top:1px solid var(--line);color:var(--mute);font-size:15px;display:grid;gap:6px}
+.toast{position:fixed;left:50%;bottom:20px;transform:translate(-50%,140%);background:var(--panel2);border:1px solid var(--cyan);padding:12px 18px;border-radius:10px;max-width:calc(100vw - 32px);transition:transform .3s;z-index:9}
+.toast.on{transform:translate(-50%,0)}
+
+@media(max-width:960px){
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .verdict{grid-column:1/-1}
+  .split{grid-template-columns:minmax(0,1fr)}
+}
+@media(max-width:600px){
+  .load{grid-template-columns:minmax(0,1fr)}
+  .brand{gap:12px}.logo{width:42px;height:42px}
+  .donutwrap{grid-template-columns:minmax(0,1fr)}
+  .donut{min-height:200px;max-width:240px;margin-inline:auto;width:100%}
+  .trow{grid-template-columns:minmax(0,1fr) 5.5em}.trow .meter{grid-column:1/-1;grid-row:2}
+  .graph{min-height:320px}
+  table{font-size:13px}
+}
+@media(prefers-reduced-motion:reduce){*{transition:none!important;scroll-behavior:auto!important}}
